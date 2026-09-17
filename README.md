@@ -49,3 +49,7 @@ npm ci
 make            # produces quai-dashboard_x86_64.s9pk
 make install    # sideloads to the server in ~/.startos/config.yaml
 ```
+
+## Donate
+
+Optional, and appreciated: [DONATE.md](DONATE.md).

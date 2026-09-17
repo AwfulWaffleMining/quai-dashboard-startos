@@ -1,10 +1,10 @@
-import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
+import { VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '1.0.0:0',
+  version: '1.0.0:1',
   releaseNotes: {
     en_US:
-      'First release. The mining dashboard for the Quai Network package, previously built into it: hashrate history, workers, blocks found, share luck, CSV export and a connection builder.',
+      'Adds a donation link. Tips are optional and go to the package maintainer; the dashboard takes no fee and never touches your mining rewards.',
   },
-  migrations: { up: async ({ effects }) => {}, down: IMPOSSIBLE },
+  migrations: {},
 })

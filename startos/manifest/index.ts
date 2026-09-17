@@ -8,7 +8,8 @@ export const manifest = setupManifest({
   packageRepo: 'https://github.com/AwfulWaffleMining/quai-dashboard-startos',
   upstreamRepo: 'https://github.com/AwfulWaffleMining/quai-dashboard-startos',
   marketingUrl: 'https://www.awfulwafflemining.com',
-  donationUrl: null,
+  donationUrl:
+    'https://github.com/AwfulWaffleMining/quai-dashboard-startos/blob/main/DONATE.md',
   description: { short, long },
   volumes: ['main'],
   images: {
