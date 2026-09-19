@@ -7,6 +7,7 @@ Keep `README.md` (technical reference) and `instructions.md` (end-user docs) in 
 ## This repo
 
 - **Port changes in the node package break this one.** The stats API moved 3336 -> 3306 in node 0.56.0:7; always keep a fallback to the previous port so the two packages can be updated in either order.
+- **Push the node package first, then refresh this lockfile.** `package.json` pins go-quai-startos to `main`, and `npm ci` in CI installs whatever commit the lock names. Changing an id there and pushing here without re-running `npm install` fails the build with "has no exported member".
 - **The node package is the source of truth for ids.** `mainHostId`, `rpcHostId`, their ports and the health check ids live in go-quai-startos; `startos/utils.ts` mirrors them. Change both together.
 - **The zone RPC is optional.** Never make the dashboard fail when it is absent: the node only shares it when the user turns it on.
 - **Join password options with `_`, never `,`.** go-quai accepts either (`parsePassword` normalises underscores), but Canaan/Avalon firmware rejects a comma in the password field.
