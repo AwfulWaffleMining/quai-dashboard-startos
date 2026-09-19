@@ -6,6 +6,7 @@ Keep `README.md` (technical reference) and `instructions.md` (end-user docs) in 
 
 ## This repo
 
+- **Port changes in the node package break this one.** The stats API moved 3336 -> 3306 in node 0.56.0:7; always keep a fallback to the previous port so the two packages can be updated in either order.
 - **The node package is the source of truth for ids.** `mainHostId`, `rpcHostId`, their ports and the health check ids live in go-quai-startos; `startos/utils.ts` mirrors them. Change both together.
 - **The zone RPC is optional.** Never make the dashboard fail when it is absent: the node only shares it when the user turns it on.
 - **Keep the page free of external requests** — no CDNs, no web fonts, no charting libraries.

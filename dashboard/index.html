@@ -585,13 +585,24 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     const n = d.summary.node || {};
     if (n.synced) setNode('ok', 'synced · block ' + fmtNum(n.height || 0));
     else setNode('warn', 'syncing · ' + fmtNum(n.height || 0) + ' / ' + fmtNum(n.tip || 0));
-    const syncing = !n.synced;
-    $('syncBanner').classList.toggle('hidden', !syncing);
+    // Distinguish "the node is behind" from "we cannot see the node at all".
+    const blind = d.summary.stratumOK === false;
+    const syncing = !blind && !n.synced;
+    if (blind) setNode('bad', "can't reach the node's mining API");
+    $('syncBanner').classList.toggle('hidden', !syncing && !blind);
     $('cSyncWarn').classList.toggle('hidden', !syncing);
     if (syncing) {
       const p = n.tip ? Math.min(100, (100 * (n.height || 0)) / n.tip) : 0;
       $('syncText').textContent = 'Block ' + fmtNum(n.height || 0) + ' of ' + fmtNum(n.tip || 0) + ' (' + fmtNum(n.behind || 0) + ' behind). Stratum is up, but don\u2019t point miners here until the node is synced.';
       $('syncFill').style.width = p.toFixed(1) + '%';
+    }
+    if (blind) {
+      $('syncBanner').querySelector('.t').textContent = 'Node unreachable';
+      $('syncText').textContent =
+        "The Quai Network service is running but its mining stats API is not answering, so this page has nothing to show. It usually means the node is still starting up, or the two packages are on versions that disagree about the API port.";
+      $('syncFill').style.width = '0%';
+    } else {
+      $('syncBanner').querySelector('.t').textContent = 'Node syncing';
     }
     if (!state.algo) {
       // default: the algorithm with the most active miners

@@ -14,7 +14,7 @@ Addresses are resolved with `sdk.host.getBridgeAddress` against ids the node pac
 
 | What | Host id | Port | Required |
 | --- | --- | --- | --- |
-| Stratum stats API | `main` | 3336 | yes |
+| Stratum stats API | `main` | 3306 (falls back to 3336 for nodes before 0.56.0:7) | yes |
 | Zone RPC | `rpc` | 9200 | no: only exported when the node's RPC sharing is on |
 
 Without the RPC the dashboard omits `estimatedBlockReward`, `workshareReward` and `avgBlockTime`; blocks found are then recorded with no reward figure.

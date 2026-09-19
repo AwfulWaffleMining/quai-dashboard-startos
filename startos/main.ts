@@ -6,6 +6,7 @@ import {
   nodeRpcHostId,
   nodeRpcPort,
   nodeStratumApiPort,
+  nodeStratumApiPortLegacy,
   nodeStratumHostId,
   stratumInterfaces,
   uiPort,
@@ -19,14 +20,20 @@ export const main = sdk.setupMain(async ({ effects }) => {
 
   // The node's stratum API over the LXC bridge. Reactive: if go-quai's assigned
   // port changes, this restarts with the new address.
-  const stratum = await sdk.host
-    .getBridgeAddress(effects, {
-      packageId: nodePackageId,
-      hostId: nodeStratumHostId,
-      internalPort: nodeStratumApiPort,
-      ssl: false,
-    })
-    .const()
+  const bridgeTo = async (internalPort: number) =>
+    sdk.host
+      .getBridgeAddress(effects, {
+        packageId: nodePackageId,
+        hostId: nodeStratumHostId,
+        internalPort,
+        ssl: false,
+      })
+      .const()
+      .catch(() => null)
+
+  const stratum =
+    (await bridgeTo(nodeStratumApiPort)) ??
+    (await bridgeTo(nodeStratumApiPortLegacy))
   if (!stratum) {
     throw new Error(
       i18n('Waiting for the Quai Network node to become reachable'),

@@ -133,6 +133,9 @@ type Summary struct {
 	// Ports miners should connect to, passed in by the package because StartOS
 	// assigns them and they are not always the defaults.
 	StratumPorts map[string]int `json:"stratumPorts,omitempty"`
+	// False when the node's stats API has never answered: the page must say so
+	// rather than reporting an unsynced node it cannot actually see.
+	StratumOK bool `json:"stratumOK"`
 }
 
 // store is everything kept on disk.
@@ -321,7 +324,10 @@ func workerKey(w rawWorker) string {
 func (c *collector) poll() {
 	var ov poolOverview
 	if err := c.getJSON(c.stratum+"/api/pool/stats", &ov); err != nil {
-		log.Printf("dashboard: stratum stats unavailable: %v", err)
+		log.Printf("dashboard: stratum stats unavailable at %s: %v", c.stratum, err)
+		c.mu.Lock()
+		c.summary.StratumOK = false
+		c.mu.Unlock()
 		return
 	}
 	var raws []rawWorker
@@ -479,7 +485,7 @@ func (c *collector) poll() {
 	if node.Tip < node.Height {
 		node.Tip = node.Height
 	}
-	c.summary = Summary{Node: node, Mining: mining, Algos: algoSummary, StratumPorts: c.stratumPorts}
+	c.summary = Summary{Node: node, Mining: mining, Algos: algoSummary, StratumPorts: c.stratumPorts, StratumOK: true}
 	c.dirty = true
 }
 

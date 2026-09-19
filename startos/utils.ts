@@ -5,7 +5,11 @@ export const mountpoint = '/data'
 
 export const nodePackageId = 'go-quai'
 export const nodeStratumHostId = 'main'
-export const nodeStratumApiPort = 3336
+// The node's stats API. 0.56.0:7 moved it from 3336 to 3306 to dodge a clash
+// with Public Pool, so try the current port first and fall back to the old one
+// for nodes that have not been updated yet.
+export const nodeStratumApiPort = 3306
+export const nodeStratumApiPortLegacy = 3336
 export const nodeRpcHostId = 'rpc'
 export const nodeRpcPort = 9200
 
