@@ -127,6 +127,8 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
 .blk.block::before{background:var(--green)}
 .blk.workshare::before{background:var(--sha)}
 .blk.unverified::before{background:var(--dim)}
+.blk.paid::before{background:var(--green)}
+.blk .dim{color:var(--dim)}
 .blk .h{font-family:var(--display);font-size:15px;margin:4px 0 2px}
 .blk .rw{font-family:var(--mono);font-size:15px;margin-top:6px}
 .blk .meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -718,11 +720,14 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     $('bPoolNote').textContent = m.estimatedBlockReward
       ? 'one of ' + Math.round(m.estimatedBlockReward / Math.max(1e-9, m.workshareReward)) + ' slots in a ' + m.estimatedBlockReward.toFixed(0) + ' QUAI pool'
       : "a share of each block's reward pool";
-    const earned = items.reduce((s, b) => s + (b.estReward || 0), 0);
+    const earned = items.reduce((s, b) => s + (b.paidReward || b.estReward || 0), 0);
+    const settled = items.filter((b) => b.paidReward > 0).length;
     $('bEarned').innerHTML = esc(earned.toFixed(2)) + '<small>QUAI</small>';
-    $('bEarnedSplit').innerHTML = m.workshareReward
-      ? 'at <b>' + m.workshareReward.toFixed(2) + '</b> QUAI per workshare'
-      : 'reward figures need the node RPC';
+    $('bEarnedSplit').innerHTML = settled
+      ? '<b>' + settled + '</b> of ' + items.length + ' confirmed on chain'
+      : m.workshareReward
+        ? 'at <b>' + m.workshareReward.toFixed(2) + '</b> QUAI per workshare'
+        : 'reward figures need the node RPC';
 
     // rate of workshares, measured against what this hashrate should produce
     const k = state.algo;
@@ -752,11 +757,18 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     $('blockRail').innerHTML = items.length ? items.slice(0, 40).map((b) => {
       const kind = b.kind || 'unverified';
       const label = kind === 'block' ? 'block' : kind === 'workshare' ? 'workshare' : 'confirming';
-      return '<div class="blk ' + kind + '">' +
+      const paid = b.paidReward > 0;
+      const amount = paid ? b.paidReward : b.estReward;
+      // Link to the transaction that paid us once it is on chain; until then the
+      // reward is earned but not yet confirmed, so there is nothing to point at.
+      const link = paid
+        ? '<a href="https://quaiscan.io/tx/' + esc(b.paidTx) + '" target="_blank" rel="noopener noreferrer">paid in ' + fmtNum(b.paidHeight) + '</a>'
+        : '<span class="dim">awaiting confirmation</span>';
+      return '<div class="blk ' + kind + (paid ? ' paid' : '') + '">' +
         '<span class="st">' + label + '</span>' +
         '<div class="h">#' + fmtNum(b.height) + '</div>' +
-        '<div class="rw">' + (b.estReward ? b.estReward.toFixed(2) : '–') + ' <span class="label">QUAI</span></div>' +
-        '<div class="meta">' + esc(b.worker.split('.').pop()) + ' · ' + ago(b.foundAt) + '<br><a href="https://quaiscan.io/block/' + esc(b.height) + '" target="_blank" rel="noopener noreferrer">' + esc(short(b.hash)) + '</a></div>' +
+        '<div class="rw">' + (amount ? amount.toFixed(2) : '–') + ' <span class="label">QUAI</span>' + (paid ? '' : ' <span class="label" title="estimated until the payout lands">est</span>') + '</div>' +
+        '<div class="meta">' + esc(b.worker.split('.').pop()) + ' · ' + ago(b.foundAt) + '<br>' + link + '</div>' +
         '</div>';
     }).join('') : '<div class="empty" style="flex:1">Nothing yet. Every share is a roll of the dice; the histogram below shows how close they are coming.</div>';
 

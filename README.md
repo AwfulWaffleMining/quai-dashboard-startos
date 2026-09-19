@@ -28,7 +28,9 @@ go-quai keeps stratum stats in memory only (workers vanish on restart, hashrate 
 | Hashrate and reject rate per algorithm, one sample a minute | 7 days |
 | Per-worker samples (24 h average), last share, offline status | worker drops 24 h after its last share |
 | Shares with difficulty and block threshold | 6000 per algorithm |
-| Submissions (workshares and blocks) with their reward | permanent |
+| Submissions (workshares and blocks), their reward, and the payout that settled them | permanent |
+
+A workshare is paid by a coinbase transaction in a later block: 7 blocks in the cases measured. `findPayouts` scans up to 25 blocks after each recorded workshare for a transaction paying one of our worker addresses, then stores the amount, transaction hash and height, and gives up after 4 empty passes. The payout is not in the workshare's own block, which belongs to whoever mined it.
 
 `stats.json` is written by one writer at a time, through a private temp file that is flushed to disk before replacing the old copy, and the previous copy is kept as `stats.json.bak` for load to fall back on. An earlier version shared one temp file between two concurrent saves on shutdown and lost the whole history to a truncated write.
 

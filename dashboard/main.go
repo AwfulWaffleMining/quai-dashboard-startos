@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
@@ -35,6 +36,11 @@ var (
 )
 
 const (
+	// A workshare's reward arrives as a coinbase transaction a few blocks after
+	// the workshare itself: 7 in the cases measured. Scan a generous window.
+	payoutScanDepth  = 25
+	payoutScanGiveUp = 4 // stop scanning a workshare after this many empty passes
+
 	saveEvery     = 5 * time.Minute
 	historyKeep   = 7 * 24 * 60      // 7 days of per-minute samples
 	sharesKeep    = 6000             // per algorithm
@@ -92,6 +98,13 @@ type Block struct {
 	FoundAt   time.Time `json:"foundAt"`
 	EstReward float64   `json:"estReward"`
 	Kind      string    `json:"kind"` // workshare | block | unverified
+	// What the chain actually paid, found by scanning the blocks that follow
+	// for a coinbase to our address. Empty until the payout lands (about 7-15
+	// blocks later) or when the node RPC is not shared.
+	PaidReward float64 `json:"paidReward,omitempty"`
+	PaidTx     string  `json:"paidTx,omitempty"`
+	PaidHeight uint64  `json:"paidHeight,omitempty"`
+	PayoutMiss int     `json:"-"` // scans that came up empty; stop looking eventually
 }
 
 type Share struct {
@@ -748,6 +761,100 @@ func (c *collector) verifyKinds() {
 	c.dirty = true
 }
 
+// findPayouts looks for the coinbase transaction that actually paid each
+// recorded workshare, so the dashboard can show the real amount and link to it
+// rather than showing an estimate.
+func (c *collector) findPayouts() {
+	if c.rpc == "" {
+		return
+	}
+	c.mu.RLock()
+	tip := c.summary.Node.Height
+	var pending []Block
+	addrs := map[string]bool{}
+	for _, b := range c.st.Blocks {
+		if b.PaidTx == "" && b.PayoutMiss < payoutScanGiveUp && b.Height > 0 {
+			pending = append(pending, b)
+		}
+	}
+	for _, w := range c.st.Workers {
+		if w.Address != "" {
+			addrs[strings.ToLower(w.Address)] = true
+		}
+	}
+	c.mu.RUnlock()
+	if len(pending) == 0 || len(addrs) == 0 {
+		return
+	}
+	if len(pending) > 3 { // a few per poll: each one costs up to 25 RPC calls
+		pending = pending[:3]
+	}
+
+	type payout struct {
+		amount float64
+		tx     string
+		height uint64
+	}
+	found := map[string]payout{}
+	misses := map[string]bool{}
+
+	for _, b := range pending {
+		if tip > 0 && b.Height+payoutScanDepth > tip {
+			continue // the payout may simply not have been mined yet
+		}
+		hit := false
+		for i := uint64(1); i <= payoutScanDepth && !hit; i++ {
+			res, err := c.rpcCall("quai_getBlockByNumber", fmt.Sprintf(`["0x%x",true]`, b.Height+i))
+			if err != nil || len(res) == 0 || string(res) == "null" {
+				continue
+			}
+			var blk struct {
+				Transactions []struct {
+					To    string `json:"to"`
+					Value string `json:"value"`
+					Hash  string `json:"hash"`
+				} `json:"transactions"`
+			}
+			if err := json.Unmarshal(res, &blk); err != nil {
+				continue
+			}
+			for _, t := range blk.Transactions {
+				if !addrs[strings.ToLower(t.To)] {
+					continue
+				}
+				v := new(big.Int)
+				if _, ok := v.SetString(strings.TrimPrefix(t.Value, "0x"), 16); !ok {
+					continue
+				}
+				amount, _ := new(big.Float).Quo(new(big.Float).SetInt(v), big.NewFloat(1e18)).Float64()
+				found[b.Hash] = payout{amount: amount, tx: t.Hash, height: b.Height + i}
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			misses[b.Hash] = true
+		}
+	}
+	if len(found) == 0 && len(misses) == 0 {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.st.Blocks {
+		if p, ok := found[c.st.Blocks[i].Hash]; ok {
+			c.st.Blocks[i].PaidReward = p.amount
+			c.st.Blocks[i].PaidTx = p.tx
+			c.st.Blocks[i].PaidHeight = p.height
+			log.Printf("dashboard: workshare %d paid %.4f QUAI in block %d", c.st.Blocks[i].Height, p.amount, p.height)
+		} else if misses[c.st.Blocks[i].Hash] {
+			c.st.Blocks[i].PayoutMiss++
+		}
+	}
+	c.dirty = true
+}
+
 // sample appends one hashrate point per algorithm, with the reject rate over
 // the interval rather than since the node started.
 func (c *collector) sample() {
@@ -803,6 +910,7 @@ func (c *collector) run(ctx context.Context) {
 		case <-pollT.C:
 			c.poll()
 			c.verifyKinds()
+			c.findPayouts()
 		case <-sampleT.C:
 			c.sample()
 		case <-saveT.C:
