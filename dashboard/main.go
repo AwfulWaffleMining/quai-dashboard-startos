@@ -172,6 +172,10 @@ type collector struct {
 	failures int
 	giveUp   func()
 	gaveUp   bool
+	// Saves must not overlap: shutdown triggers one from the collector loop and
+	// one from main, and two writers sharing a temp file produced a truncated
+	// stats.json that lost every recorded submission.
+	saveMu sync.Mutex
 }
 
 func newCollector(dataDir, stratum, health, rpc string) *collector {
@@ -204,8 +208,20 @@ func (c *collector) load() {
 	}
 	var s store
 	if err := json.Unmarshal(b, &s); err != nil {
-		log.Printf("dashboard: stored stats are unreadable, starting fresh: %v", err)
-		return
+		// Fall back to the previous good copy before giving up: the history is
+		// the whole point of this package and cannot be rebuilt from the node.
+		log.Printf("dashboard: stored stats are unreadable (%v); trying the backup", err)
+		if bb, berr := os.ReadFile(c.path() + ".bak"); berr == nil {
+			if jerr := json.Unmarshal(bb, &s); jerr == nil {
+				log.Printf("dashboard: recovered stats from the backup copy")
+			} else {
+				log.Printf("dashboard: the backup is unreadable too, starting fresh: %v", jerr)
+				return
+			}
+		} else {
+			log.Printf("dashboard: no backup available, starting fresh")
+			return
+		}
 	}
 	if s.History == nil {
 		s.History = map[string][]Sample{}
@@ -246,7 +262,11 @@ func (c *collector) load() {
 }
 
 // save writes atomically: a half-written stats file would lose the block history.
+// One writer at a time, a private temp file, and fsync before the rename.
 func (c *collector) save() {
+	c.saveMu.Lock()
+	defer c.saveMu.Unlock()
+
 	c.mu.RLock()
 	b, err := json.Marshal(c.st)
 	c.mu.RUnlock()
@@ -258,10 +278,34 @@ func (c *collector) save() {
 		log.Printf("dashboard: could not create %s: %v", c.dataDir, err)
 		return
 	}
-	tmp := c.path() + ".tmp"
-	if err := os.WriteFile(tmp, b, fileMode); err != nil {
+	f, err := os.CreateTemp(c.dataDir, "stats-*.json")
+	if err != nil {
+		log.Printf("dashboard: could not create a temp file: %v", err)
+		return
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // no-op once the rename succeeds
+	if _, err := f.Write(b); err != nil {
+		f.Close()
 		log.Printf("dashboard: could not write stats: %v", err)
 		return
+	}
+	if err := f.Sync(); err != nil { // on disk before anything replaces the old copy
+		f.Close()
+		log.Printf("dashboard: could not flush stats: %v", err)
+		return
+	}
+	if err := f.Close(); err != nil {
+		log.Printf("dashboard: could not close stats: %v", err)
+		return
+	}
+	if err := os.Chmod(tmp, fileMode); err != nil {
+		log.Printf("dashboard: could not set permissions on stats: %v", err)
+	}
+	// Keep the previous good copy: if a future write is ever cut short, load()
+	// falls back to this rather than starting empty.
+	if prev, err := os.ReadFile(c.path()); err == nil && len(prev) > 0 {
+		_ = os.WriteFile(c.path()+".bak", prev, fileMode)
 	}
 	if err := os.Rename(tmp, c.path()); err != nil {
 		log.Printf("dashboard: could not replace stats: %v", err)

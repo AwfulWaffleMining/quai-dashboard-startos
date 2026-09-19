@@ -30,6 +30,8 @@ go-quai keeps stratum stats in memory only (workers vanish on restart, hashrate 
 | Shares with difficulty and block threshold | 6000 per algorithm |
 | Submissions (workshares and blocks) with their reward | permanent |
 
+`stats.json` is written by one writer at a time, through a private temp file that is flushed to disk before replacing the old copy, and the previous copy is kept as `stats.json.bak` for load to fall back on. An earlier version shared one temp file between two concurrent saves on shutdown and lost the whole history to a truncated write.
+
 Each submission is classified by asking the node for the canonical block at that height: if its hash matches ours we won the block (reward `estimatedBlockReward`), otherwise it was a workshare included in someone else's block (reward `workshareReward`, a ninth of the pool). Without the node RPC they stay `unverified`.
 
 Environment: `DASH_ADDR`, `DASH_ASSETS`, `DASH_DATA`, `DASH_STRATUM`, `DASH_STRATUM_PORTS` (`sha256=60862,...`, the external ports StartOS assigned to the node, read with `sdk.host.get`), `DASH_RPC` (optional), `DASH_HEALTH` (optional; go-quai's `--rpc.health` endpoint, only reachable when the dashboard runs inside the node package). `DASH_SAMPLE_SECONDS` and `DASH_POLL_SECONDS` exist for tests.

@@ -13,4 +13,5 @@ Keep `README.md` (technical reference) and `instructions.md` (end-user docs) in 
 - **Keep the page free of external requests** — no CDNs, no web fonts, no charting libraries.
 - **Don't bundle Quai's Yapari or Monorama fonts, or the Quai logo.** Quai's media kit treats them as brand resources.
 - **`dashboard/index.html` is the packaged page** (bundled fonts, never fakes data). Regenerate the web preview with `scripts/make-dashboard-preview.sh`; don't hand-edit a second copy.
+- **Never let two saves run at once.** Shutdown triggers a save from both the collector loop and main; sharing a temp file truncated `stats.json` and destroyed the history. Test by stopping and starting repeatedly and re-reading the file.
 - **Test the collector against a fake node** serving go-quai's JSON shapes, covering a worker going offline, the CSV export, and reloading blocks and history after SIGTERM.
