@@ -119,6 +119,8 @@ input:focus,select:focus,button:focus-visible{outline:2px solid var(--red-line);
 .err-text{color:var(--red);font-size:13px;margin-top:6px}
 footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em}
 .hidden{display:none!important}
+.linkish{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:none;border:0;padding:0;color:var(--muted);cursor:pointer;text-decoration:underline}
+.linkish:hover{color:var(--text)}
 .rail{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px}
 .blk{flex:0 0 185px;border-radius:12px;border:1px solid var(--line-2);background:var(--panel-2);padding:12px 14px;position:relative;overflow:hidden}
 .blk::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--line-2)}
@@ -202,9 +204,12 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
         <div class="kv"><span><span class="dot ok"></span> <b id="kActive">0</b> active</span><span><span class="dot warn"></span> <b id="kOffline">0</b> offline</span></div>
       </div>
       <div class="card">
-        <div class="label">Shares this session</div>
+        <div class="label" style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+          <span>Shares this session</span>
+          <button id="kReset" type="button" class="linkish" title="Start counting again from now">reset</button>
+        </div>
         <div class="big" id="kShares">–</div>
-        <div class="kv"><span>stale <b id="kStale">0</b></span><span>invalid <b id="kInvalid">0</b></span></div>
+        <div class="kv"><span>stale <b id="kStale">0</b></span><span>invalid <b id="kInvalid">0</b></span><span id="kSince">–</span></div>
       </div>
       <div class="card">
         <div class="label">Next block (estimate)</div>
@@ -416,6 +421,28 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     get(k, d) { try { const v = localStorage.getItem('quaidash.' + k); return v === null ? d : v } catch (e) { return d } },
     set(k, v) { try { localStorage.setItem('quaidash.' + k, v) } catch (e) {} },
   };
+
+  // "This session" means since this page was opened, which is what a miner
+  // tuning clocks actually wants. The node's own counters reset when it
+  // restarts, so the baseline re-anchors whenever they go backwards.
+  const session = { start: Date.now(), base: {} };
+  function sessionCounts(k, a) {
+    const cur = {
+      valid: a.sharesValid || 0,
+      stale: a.sharesStale || 0,
+      invalid: a.sharesInvalid || 0,
+    };
+    const b = session.base[k];
+    if (!b || cur.valid < b.valid || cur.stale < b.stale || cur.invalid < b.invalid) {
+      session.base[k] = cur; // first sight, or the node restarted its counters
+      return { valid: 0, stale: 0, invalid: 0 };
+    }
+    return {
+      valid: cur.valid - b.valid,
+      stale: cur.stale - b.stale,
+      invalid: cur.invalid - b.invalid,
+    };
+  }
 
   // Dashboard shows one algorithm at a time: hashrates of different algorithms are not comparable units.
   const savedAlgo = store.get('algo', '');
@@ -629,7 +656,8 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     const ws = d.workers.filter((w) => w.algorithm === k);
     const active = ws.filter((w) => w.status === 'active');
     const avg = ws.reduce((s, w) => s + (w.avg24h || 0), 0);
-    const valid = a.sharesValid || 0, stale = a.sharesStale || 0, invalid = a.sharesInvalid || 0;
+    const sess = sessionCounts(k, a);
+    const valid = sess.valid, stale = sess.stale, invalid = sess.invalid;
     const total = valid + stale + invalid;
     $('kHash').innerHTML = hashHtml(a.hashrate || 0);
     $('kHash24').textContent = hashStr(avg);
@@ -640,6 +668,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     $('kShares').textContent = fmtNum(valid);
     $('kStale').textContent = fmtNum(stale);
     $('kInvalid').textContent = fmtNum(invalid);
+    $('kSince').textContent = 'over ' + dur((Date.now() - session.start) / 1000);
     const rate = a.hashrate > 0 && a.workshareDiff > 0 ? a.hashrate / (a.workshareDiff * DIFF1[k]) : 0;
     $('kEta').textContent = rate > 0 ? '~' + dur(1 / rate) : '–';
     $('kBest').textContent = luckStr(a.bestLuck);
@@ -902,6 +931,12 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     }
     setTimeout(() => { b.textContent = 'copy' }, 1400);
   }));
+  $('kReset').addEventListener('click', () => {
+    session.start = Date.now();
+    session.base = {};
+    if (state.data) renderDashboard();
+  });
+
   const savedTheme = store.get('theme', '');
   if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
   $('themeBtn').addEventListener('click', () => {
