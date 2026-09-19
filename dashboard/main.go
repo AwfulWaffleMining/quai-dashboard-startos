@@ -38,8 +38,11 @@ var (
 const (
 	// A workshare's reward arrives as a coinbase transaction a few blocks after
 	// the workshare itself: 7 in the cases measured. Scan a generous window.
-	payoutScanDepth  = 25
-	payoutScanGiveUp = 4 // stop scanning a workshare after this many empty passes
+	// Measured payouts landed 7 and 11 blocks after the workshare. 50 is a
+	// generous window; past that the workshare was almost certainly orphaned:
+	// accepted by our stratum but never included in a block, so it earns nothing.
+	payoutScanDepth  = 50
+	payoutScanGiveUp = 3
 
 	saveEvery     = 5 * time.Minute
 	historyKeep   = 7 * 24 * 60      // 7 days of per-minute samples
@@ -104,7 +107,10 @@ type Block struct {
 	PaidReward float64 `json:"paidReward,omitempty"`
 	PaidTx     string  `json:"paidTx,omitempty"`
 	PaidHeight uint64  `json:"paidHeight,omitempty"`
-	PayoutMiss int     `json:"-"` // scans that came up empty; stop looking eventually
+	PayoutMiss int     `json:"payoutMiss,omitempty"` // empty scans; we stop looking eventually
+	// pending until the payout is found, paid once it is, orphaned when the
+	// search window closes without one. An orphaned workshare earns nothing.
+	PayoutState string `json:"payoutState,omitempty"`
 }
 
 type Share struct {
@@ -847,9 +853,16 @@ func (c *collector) findPayouts() {
 			c.st.Blocks[i].PaidReward = p.amount
 			c.st.Blocks[i].PaidTx = p.tx
 			c.st.Blocks[i].PaidHeight = p.height
+			c.st.Blocks[i].PayoutState = "paid"
 			log.Printf("dashboard: workshare %d paid %.4f QUAI in block %d", c.st.Blocks[i].Height, p.amount, p.height)
 		} else if misses[c.st.Blocks[i].Hash] {
 			c.st.Blocks[i].PayoutMiss++
+			if c.st.Blocks[i].PayoutMiss >= payoutScanGiveUp {
+				c.st.Blocks[i].PayoutState = "orphaned"
+				log.Printf("dashboard: workshare %d was not rewarded (no payout within %d blocks)", c.st.Blocks[i].Height, payoutScanDepth)
+			} else {
+				c.st.Blocks[i].PayoutState = "pending"
+			}
 		}
 	}
 	c.dirty = true
