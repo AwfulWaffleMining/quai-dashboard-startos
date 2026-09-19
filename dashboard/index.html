@@ -119,6 +119,35 @@ input:focus,select:focus,button:focus-visible{outline:2px solid var(--red-line);
 .err-text{color:var(--red);font-size:13px;margin-top:6px}
 footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em}
 .hidden{display:none!important}
+.rail{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px}
+.blk{flex:0 0 185px;border-radius:12px;border:1px solid var(--line-2);background:var(--panel-2);padding:12px 14px;position:relative;overflow:hidden}
+.blk::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--line-2)}
+.blk.block::before{background:var(--green)}
+.blk.workshare::before{background:var(--sha)}
+.blk.unverified::before{background:var(--dim)}
+.blk .h{font-family:var(--display);font-size:15px;margin:4px 0 2px}
+.blk .rw{font-family:var(--mono);font-size:15px;margin-top:6px}
+.blk .meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk .st{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.blk.block .st{color:var(--green)}
+.blk.workshare .st{color:var(--sha)}
+.blk.unverified .st{color:var(--dim)}
+.meter{margin-top:10px}
+.meter .row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+.track{height:10px;border-radius:6px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;position:relative}
+.fill{height:100%;background:linear-gradient(90deg,var(--sha),var(--red))}
+.mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text);opacity:.5}
+.mark span{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:var(--muted)}
+.hist{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end;height:150px;margin-top:8px}
+.hist .col{display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:6px}
+.hist .b{background:var(--sha);opacity:.55;border-radius:4px 4px 0 0;min-height:2px}
+.hist .b.win{background:var(--green);opacity:.9}
+.hist .lab,.hist .n{font-family:var(--mono);font-size:10px;text-align:center;color:var(--muted)}
+.hist .n{color:var(--text);font-size:11px}
+.bar{position:relative;background:var(--panel-2);border-radius:4px;height:18px;min-width:90px}
+.bar i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--sha);opacity:.35}
+.bar b{position:relative;font-family:var(--mono);font-size:11px;padding-left:7px;line-height:18px;font-weight:500}
+.bar b.hit{color:var(--green)}
 @media (max-width:640px){.big{font-size:22px}.out-row{grid-template-columns:1fr auto}.out-row .label{grid-column:1/-1}}
 </style>
 </head>
@@ -241,30 +270,58 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     </div>
   </section>
 
-  <!-- BLOCKS & LUCK -->
+  <!-- EARNINGS -->
   <section id="tab-blocks" class="hidden">
     <div class="grid g4">
-      <div class="card accent"><div class="label">Blocks found</div><div class="big" id="bCount">0</div><div class="kv"><span>since install</span></div></div>
-      <div class="card"><div class="label">Estimated rewards</div><div class="big" id="bRewards">0 <small>QUAI</small></div><div class="kv"><span>reward at time found</span></div></div>
-      <div class="card"><div class="label">Best share</div><div class="big" id="bBest">–</div><div class="kv"><span>of block difficulty</span></div></div>
-      <div class="card"><div class="label">Average luck</div><div class="big" id="bAvg">–</div><div class="kv"><span>expected per block <b id="bExpected">–</b></span></div></div>
-    </div>
-    <div class="card" style="margin-top:12px">
-      <div class="card-h">
-        <h2>Share difficulty</h2>
-        <div class="range" data-range-for="shares">
-          <button data-range="1h" aria-pressed="true">1H</button>
-          <button data-range="24h" aria-pressed="false">24H</button>
-          <button data-range="7d" aria-pressed="false">7D</button>
-        </div>
+      <div class="card accent">
+        <div class="label">Workshares</div>
+        <div class="big" id="bShares">0</div>
+        <div class="kv"><span id="bShareRate">–</span></div>
       </div>
-      <svg id="shareChart" class="chart" viewBox="0 0 1000 300" role="img" aria-label="Share difficulty scatter against the block threshold, log scale"></svg>
-      <div class="legend"><span><i style="background:var(--sha);height:8px;width:8px;border-radius:50%"></i>SHA-256</span><span><i style="background:var(--scrypt);height:8px;width:8px;border-radius:50%"></i>Scrypt</span><span><i style="background:var(--kawpow);height:8px;width:8px;border-radius:50%"></i>KawPoW</span><span><i style="background:var(--red)"></i>block threshold</span><span><i style="background:var(--green);height:8px;width:8px;border-radius:50%"></i>block found</span><span style="margin-left:auto">log scale</span></div>
+      <div class="card">
+        <div class="label">Blocks won outright</div>
+        <div class="big" id="bBlocks">0</div>
+        <div class="kv"><span id="bBlockOdds">–</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Earned</div>
+        <div class="big" id="bEarned">0 <small>QUAI</small></div>
+        <div class="kv"><span id="bEarnedSplit">–</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Best share</div>
+        <div class="big" id="bBest">–</div>
+        <div class="kv"><span>of the workshare threshold</span></div>
+      </div>
     </div>
+
     <div class="card" style="margin-top:12px">
-      <div class="card-h"><h2>Found blocks</h2></div>
-      <div class="tablewrap"><table><thead><tr><th>Height</th><th>Hash</th><th>Algo</th><th>Worker</th><th class="num">Est. reward</th><th class="num">Found</th></tr></thead><tbody id="blockRows"></tbody></table></div>
-      <p class="hint">In solo mining every share that meets the block threshold is a block, paid in full to the address the worker logged in with. Luck is each share's difficulty as a percentage of that threshold.</p>
+      <div class="card-h"><h2 id="railTitle">Your workshares and blocks</h2><span class="label" id="railNote"></span></div>
+      <div class="rail" id="blockRail"></div>
+      <p class="hint">A share that meets the <b>workshare threshold</b> is included in someone else's block and pays a ninth of the pool. A share that meets the <b>full block difficulty</b> wins the block and the whole pool. Both come from the same hashing on your node.</p>
+    </div>
+
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card">
+        <div class="card-h"><h2>Since your last workshare</h2><span class="label" id="dryAlgo"></span></div>
+        <div class="big" id="drySince">–</div>
+        <div class="kv"><span>typical gap <b id="dryExpected">–</b></span></div>
+        <div class="meter">
+          <div class="row"><span>0</span><span>2x typical</span></div>
+          <div class="track"><div class="fill" id="dryFill" style="width:0%"></div><div class="mark" style="left:50%"><span>typical</span></div></div>
+        </div>
+        <p class="hint">Each share is an independent roll; a long gap doesn't make the next one likelier.</p>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>How close shares get</h2><span class="label" id="histNote"></span></div>
+        <div class="hist" id="histBars"></div>
+        <p class="hint">Most shares fall well short; the last bucket cleared the workshare threshold.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="card-h"><h2>Best shares</h2><span class="label">closest to the threshold</span></div>
+      <div class="tablewrap"><table><thead><tr><th>Worker</th><th>How close</th><th class="num">Share difficulty</th><th class="num">When</th></tr></thead><tbody id="bestShares"></tbody></table></div>
     </div>
   </section>
 
@@ -347,7 +404,10 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
   const ALGOS = ['sha256', 'scrypt', 'kawpow'];
   const ALGO_NAME = { sha256: 'SHA-256', scrypt: 'Scrypt', kawpow: 'KawPoW' };
   const ALGO_VAR = { sha256: '--sha', scrypt: '--scrypt', kawpow: '--kawpow' };
-  const PORT = { sha256: 3333, scrypt: 3334, kawpow: 3335 };
+  // Fallbacks only: StartOS assigns the external ports, and dash/summary reports
+  // the ones actually in use (they differ whenever another package took one).
+  const PORT_DEFAULT = { sha256: 3333, scrypt: 3334, kawpow: 3335 };
+  let PORT = Object.assign({}, PORT_DEFAULT);
   // stratum difficulty 1 = 2^32 hashes for SHA-256/KawPoW, 2^16 for Scrypt (go-quai stratum)
   const DIFF1 = { sha256: 4294967296, scrypt: 65536, kawpow: 4294967296 };
   const $ = (id) => document.getElementById(id);
@@ -383,7 +443,10 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
   }
   function ago(ts) {
     if (!ts) return '–';
-    const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+    const ms = new Date(ts).getTime();
+    // a zero timestamp means the worker connected but has never submitted a share
+    if (!isFinite(ms) || ms < 946684800000) return 'never';
+    const s = Math.max(0, (Date.now() - ms) / 1000);
     if (s < 60) return Math.round(s) + 's ago';
     if (s < 3600) return Math.round(s / 60) + 'm ago';
     if (s < 86400) return Math.round(s / 3600) + 'h ago';
@@ -471,9 +534,32 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     return { summary, workers, blocks, history: hist, shares };
   }
 
+  function normalize(d) {
+    // One bad field must not take down the whole page: every consumer below
+    // assumes arrays, so guarantee them here. (go-quai's collector returns an
+    // empty JSON list, but a nil slice from any source serializes as null.)
+    d.workers = Array.isArray(d.workers) ? d.workers : [];
+    d.blocks = Array.isArray(d.blocks) ? d.blocks : [];
+    d.history = d.history || {};
+    d.shares = d.shares || {};
+    d.summary = d.summary || {};
+    d.summary.algos = d.summary.algos || {};
+    if (d.summary.stratumPorts) {
+      ALGOS.forEach((k) => {
+        const p = Number(d.summary.stratumPorts[k]);
+        if (p > 0) PORT[k] = p;
+      });
+    }
+    ALGOS.forEach((k) => {
+      if (!Array.isArray(d.history[k])) d.history[k] = [];
+      if (!Array.isArray(d.shares[k])) d.shares[k] = [];
+    });
+    return d;
+  }
+
   async function refresh() {
     try {
-      state.data = await loadLive();
+      state.data = normalize(await loadLive());
       state.demo = false;
     } catch (e) {
       if (MODE === 'live') {
@@ -481,7 +567,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
         $('updated').textContent = 'retrying…';
         return;
       }
-      state.data = demoData();
+      state.data = normalize(demoData());
       state.demo = true;
     }
     $('demoPill').classList.toggle('hidden', !state.demo);
@@ -511,7 +597,14 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
       // default: the algorithm with the most active miners
       state.algo = ALGOS.slice().sort((x, y) => activeCount(y) - activeCount(x))[0];
     }
-    renderDashboard(); renderWorkers(); renderBlocks(); renderConnect();
+    // Render each tab independently: a failure in one must not blank the rest.
+    for (const [name, fn] of [['dashboard', renderDashboard], ['workers', renderWorkers], ['blocks', renderBlocks], ['connect', renderConnect]]) {
+      try {
+        fn();
+      } catch (e) {
+        console.error('render ' + name + ' failed:', e);
+      }
+    }
   }
 
   function renderDashboard() {
@@ -571,23 +664,87 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
 
   function renderBlocks() {
     const d = state.data;
-    const bl = d.blocks;
-    $('bCount').textContent = fmtNum(bl.length);
-    const tot = bl.reduce((s, b) => s + (b.estReward || 0), 0);
-    $('bRewards').innerHTML = esc(tot.toFixed(2)) + '<small>QUAI</small>';
-    let best = 0, avgs = [], expected = 0;
-    ALGOS.forEach((k) => {
-      const a = d.summary.algos[k]; if (!a) return;
-      best = Math.max(best, a.bestLuck || 0); if (a.avgLuck) avgs.push(a.avgLuck);
+    const items = d.blocks;
+    const blocks = items.filter((b) => b.kind === 'block');
+    const shares = items.filter((b) => b.kind !== 'block');
+    const m = d.summary.mining || {};
+
+    $('bShares').textContent = fmtNum(shares.length);
+    $('bBlocks').textContent = fmtNum(blocks.length);
+    const earned = items.reduce((s, b) => s + (b.estReward || 0), 0);
+    $('bEarned').innerHTML = esc(earned.toFixed(2)) + '<small>QUAI</small>';
+    $('bEarnedSplit').innerHTML = m.workshareReward
+      ? 'workshare <b>' + m.workshareReward.toFixed(2) + '</b> · block <b>' + (m.estimatedBlockReward || 0).toFixed(2) + '</b>'
+      : 'reward figures need the node RPC';
+
+    // rate of workshares, measured against what this hashrate should produce
+    const k = state.algo;
+    const a = d.summary.algos[k] || {};
+    const netH = (m.netHashrate || {})[k] || 0;
+    const netDiff = (m.netDifficulty || {})[k] || 0; // hashes per workshare on this algo
+    const shareEvery = (m.avgShareTime || {})[k] || 0;
+    let expectedGap = 0;
+    if (netDiff > 0 && a.hashrate > 0) {
+      expectedGap = netDiff / a.hashrate; // direct: your hashes needed / your rate
+    } else if (netH > 0 && a.hashrate > 0 && shareEvery > 0) {
+      expectedGap = shareEvery * (netH / a.hashrate); // fallback when difficulty is missing
+    }
+    $('dryAlgo').textContent = ALGO_NAME[k];
+    const last = shares.length ? new Date(shares[0].foundAt).getTime() : 0;
+    const since = last ? (Date.now() - last) / 1000 : 0;
+    $('drySince').textContent = last ? dur(since) : '–';
+    $('dryExpected').textContent = expectedGap ? dur(expectedGap) : '–';
+    $('dryFill').style.width = expectedGap ? Math.min(100, (100 * since) / (2 * expectedGap)).toFixed(1) + '%' : '0%';
+    $('bShareRate').innerHTML = expectedGap ? 'about one every <b>' + dur(expectedGap) + '</b>' : 'connect a miner to see your rate';
+
+    // Odds of winning a block outright. A block pays 9x a workshare and is about
+    // 9x rarer: both follow ExpectedWorksharesPerBlock + 1 in go-quai. Deriving
+    // it from the measured workshare gap keeps the two consistent.
+    const SHARES_PER_BLOCK = m.workshareReward > 0 && m.estimatedBlockReward > 0
+      ? m.estimatedBlockReward / m.workshareReward
+      : 9;
+    if (expectedGap > 0) {
+      $('bBlockOdds').innerHTML = 'about one every <b>' + dur(expectedGap * SHARES_PER_BLOCK) + '</b> at this hashrate';
+    } else {
+      $('bBlockOdds').textContent = netH ? 'connect a miner to see your odds' : 'needs the node RPC';
+    }
+    $('bBest').textContent = a.bestLuck ? pct(a.bestLuck, 1) : '–';
+
+    // rail
+    $('railNote').textContent = items.length ? blocks.length + ' block' + (blocks.length === 1 ? '' : 's') + ' · ' + shares.length + ' workshares' : '';
+    $('blockRail').innerHTML = items.length ? items.slice(0, 40).map((b) => {
+      const kind = b.kind || 'unverified';
+      const label = kind === 'block' ? 'block won' : kind === 'workshare' ? 'workshare' : 'unverified';
+      return '<div class="blk ' + kind + '">' +
+        '<span class="st">' + label + '</span>' +
+        '<div class="h">#' + fmtNum(b.height) + '</div>' +
+        '<div class="rw">' + (b.estReward ? b.estReward.toFixed(2) : '–') + ' <span class="label">QUAI</span></div>' +
+        '<div class="meta">' + esc(b.worker.split('.').pop()) + ' · ' + ago(b.foundAt) + '<br><a href="https://quaiscan.io/block/' + esc(b.height) + '" target="_blank" rel="noopener noreferrer">' + esc(short(b.hash)) + '</a></div>' +
+        '</div>';
+    }).join('') : '<div class="empty" style="flex:1">Nothing yet. Every share is a roll of the dice; the histogram below shows how close they are coming.</div>';
+
+    // histogram of how close shares get, in decades of the threshold
+    const all = [];
+    ALGOS.forEach((kk) => (d.shares[kk] || []).forEach((sh) => all.push((100 * sh.diff) / Math.max(1e-12, sh.threshold))));
+    const buckets = [0, 0, 0, 0, 0];
+    all.forEach((v) => {
+      const i = v >= 100 ? 4 : v >= 10 ? 3 : v >= 1 ? 2 : v >= 0.1 ? 1 : 0;
+      buckets[i]++;
     });
-    $('bBest').textContent = best ? pct(best, 1) : '–';
-    $('bAvg').textContent = avgs.length ? pct(avgs.reduce((s, x) => s + x, 0) / avgs.length, 1) : '–';
-    const avgLuck = avgs.length ? avgs.reduce((s, x) => s + x, 0) / avgs.length : 0;
-    expected = avgLuck ? 100 / avgLuck : 0;
-    $('bExpected').textContent = expected ? fmtNum(expected) + ' shares' : '–';
-    drawShares();
-    $('blockRows').innerHTML = bl.length ? bl.map((b) => '<tr><td class="mono">#' + fmtNum(b.height) + '</td><td class="mono"><a href="https://quaiscan.io/block/' + esc(b.height) + '" target="_blank" rel="noopener noreferrer" title="' + esc(b.hash) + '">' + esc(short(b.hash)) + '</a></td><td>' + algoBadge(b.algorithm) + '</td><td>' + esc(b.worker) + '</td><td class="num">' + (b.estReward ? '~' + b.estReward.toFixed(2) + ' QUAI' : '–') + '</td><td class="num">' + new Date(b.foundAt).toLocaleString() + '</td></tr>').join('')
-      : '<tr><td colspan="6" class="empty">No blocks found yet. Every share has a chance; the chart above shows how close they come.</td></tr>';
+    const labels = ['&lt;0.1%', '0.1–1%', '1–10%', '10–100%', 'threshold'];
+    const peak = Math.max(1, ...buckets);
+    $('histNote').textContent = all.length ? fmtNum(all.length) + ' shares · ' + state.shareRange : 'no shares yet';
+    $('histBars').innerHTML = buckets.map((n, i) =>
+      '<div class="col"><span class="n">' + fmtNum(n) + '</span><div class="b' + (i === 4 ? ' win' : '') + '" style="height:' + Math.max(2, (100 * n) / peak).toFixed(1) + '%"></div><span class="lab">' + labels[i] + '</span></div>').join('');
+
+    // best shares
+    const flat = [];
+    ALGOS.forEach((kk) => (d.shares[kk] || []).forEach((sh) => flat.push({ k: kk, luck: (100 * sh.diff) / Math.max(1e-12, sh.threshold), diff: sh.diff, t: sh.t })));
+    flat.sort((x, y) => y.luck - x.luck);
+    $('bestShares').innerHTML = flat.length ? flat.slice(0, 6).map((sh) => {
+      const hit = sh.luck >= 100;
+      return '<tr><td>' + algoBadge(sh.k) + '</td><td><div class="bar"><i style="width:' + Math.min(100, sh.luck).toFixed(0) + '%"></i><b' + (hit ? ' class="hit"' : '') + '>' + pct(sh.luck, sh.luck >= 10 ? 0 : 2) + (hit ? ' — cleared' : '') + '</b></div></td><td class="num">' + fmtCompact(sh.diff) + '</td><td class="num">' + ago(sh.t) + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="empty">No shares in this range yet.</td></tr>';
   }
 
   // ── charts (plain SVG, no library) ──────────────────────────────────────
@@ -661,30 +818,6 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     el('path', { d: rej, fill: 'none', stroke: css('--muted'), 'stroke-width': 1, 'stroke-dasharray': '2 3' }, svg);
     const mean = pts.reduce((sum, p) => sum + p[1], 0) / pts.length; // average over every sample, not the buckets
     setLegend(hashStr(pts[pts.length - 1][1]), hashStr(mean));
-  }
-
-  function drawShares() {
-    const svg = $('shareChart'); svg.innerHTML = '';
-    const W = 1000, H = 300, L = 70, R = 20, T = 14, B = 30;
-    const pts = []; ALGOS.forEach((k) => (state.data.shares[k] || []).forEach((s) => pts.push(Object.assign({ k }, s))));
-    if (!pts.length) { el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle' }, svg).textContent = 'No shares in this range yet'; return }
-    // plot luck (share difficulty as % of that share's block threshold) so algorithms share one axis
-    const luck = (s) => (100 * s.diff) / Math.max(1e-12, s.threshold);
-    const lo = 0.01, hi = 200;
-    const t0 = Math.min(...pts.map((p) => p.t)), t1 = Math.max(Date.now(), ...pts.map((p) => p.t));
-    const X = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
-    const Y = (v) => T + (1 - (Math.log10(Math.max(lo, Math.min(hi, v))) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo))) * (H - T - B);
-    [0.01, 0.1, 1, 10, 100].forEach((v) => {
-      el('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), stroke: css('--line'), 'stroke-dasharray': '3 5' }, svg);
-      el('text', { x: L - 8, y: Y(v) + 3, 'text-anchor': 'end' }, svg).textContent = v + '%';
-    });
-    el('line', { x1: L, x2: W - R, y1: Y(100), y2: Y(100), stroke: css('--red'), 'stroke-width': 1.5, 'stroke-dasharray': '6 4' }, svg);
-    el('text', { x: W - R, y: Y(100) - 6, 'text-anchor': 'end', style: 'fill:' + css('--red') }, svg).textContent = 'block threshold';
-    for (let i = 0; i <= 5; i++) { const t = t0 + ((t1 - t0) * i) / 5; el('text', { x: X(t), y: H - 8, 'text-anchor': 'middle' }, svg).textContent = timeLabel(t, t1 - t0) }
-    pts.sort((a, b) => a.isBlock - b.isBlock).forEach((s) => {
-      const c = el('circle', { cx: X(s.t).toFixed(1), cy: Y(luck(s)).toFixed(1), r: s.isBlock ? 6 : 3.2, fill: s.isBlock ? css('--green') : css(ALGO_VAR[s.k]), 'fill-opacity': s.isBlock ? 1 : 0.75 }, svg);
-      el('title', {}, c).textContent = ALGO_NAME[s.k] + ' · ' + pct(luck(s), 3) + ' of block difficulty' + (s.isBlock ? ' · BLOCK' : '');
-    });
   }
 
   // ── connect builder ─────────────────────────────────────────────────────

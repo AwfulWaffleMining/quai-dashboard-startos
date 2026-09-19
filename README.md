@@ -28,9 +28,11 @@ go-quai keeps stratum stats in memory only (workers vanish on restart, hashrate 
 | Hashrate and reject rate per algorithm, one sample a minute | 7 days |
 | Per-worker samples (24 h average), last share, offline status | worker drops 24 h after its last share |
 | Shares with difficulty and block threshold | 6000 per algorithm |
-| Blocks found, with the reward estimated at the time | permanent |
+| Submissions (workshares and blocks) with their reward | permanent |
 
-Environment: `DASH_ADDR`, `DASH_ASSETS`, `DASH_DATA`, `DASH_STRATUM`, `DASH_RPC` (optional), `DASH_HEALTH` (optional; go-quai's `--rpc.health` endpoint, only reachable when the dashboard runs inside the node package). `DASH_SAMPLE_SECONDS` and `DASH_POLL_SECONDS` exist for tests.
+Each submission is classified by asking the node for the canonical block at that height: if its hash matches ours we won the block (reward `estimatedBlockReward`), otherwise it was a workshare included in someone else's block (reward `workshareReward`, a ninth of the pool). Without the node RPC they stay `unverified`.
+
+Environment: `DASH_ADDR`, `DASH_ASSETS`, `DASH_DATA`, `DASH_STRATUM`, `DASH_STRATUM_PORTS` (`sha256=60862,...`, the external ports StartOS assigned to the node, read with `sdk.host.get`), `DASH_RPC` (optional), `DASH_HEALTH` (optional; go-quai's `--rpc.health` endpoint, only reachable when the dashboard runs inside the node package). `DASH_SAMPLE_SECONDS` and `DASH_POLL_SECONDS` exist for tests.
 
 ## Endpoints
 

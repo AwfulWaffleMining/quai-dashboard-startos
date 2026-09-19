@@ -16,7 +16,7 @@ To turn it on, open the **Quai Network** service, run the **Settings** action, a
 
 - **Dashboard**: hashrate with history (1H, 24H, 7D), workers, shares, and how long a block should take at your hashrate. The SHA-256 / Scrypt / KawPoW buttons switch which miners the tab is about.
 - **Workers**: every worker with its hashrate, 24-hour average, reject rate and last share. Workers that stop are marked offline and drop off after 24 hours without a share.
-- **Blocks & luck**: blocks you have found, and a chart of each share's difficulty against the block threshold. In solo mining a share that meets the threshold *is* a block.
+- **Earnings**: your workshares and blocks. A share that meets the **workshare threshold** is included in someone else's block and pays about a ninth of the reward pool; a share that meets the **full block difficulty** wins the block and the whole pool. The tab shows both, how long since your last workshare against the typical gap, your odds of a block at your hashrate, how close your shares are coming, and your best ones.
 - **How to connect**: fills in the pool URL, username and password for your hardware, including a suggested fixed difficulty and the lock period.
 
 ## What it keeps

@@ -7,6 +7,7 @@ import {
   nodeRpcPort,
   nodeStratumApiPort,
   nodeStratumHostId,
+  stratumInterfaces,
   uiPort,
 } from './utils'
 
@@ -44,6 +45,33 @@ export const main = sdk.setupMain(async ({ effects }) => {
     .const()
     .catch(() => null)
 
+  // The external ports StartOS assigned to the node's stratum interfaces. These
+  // are what miners must connect to, and they are often not the defaults: any
+  // other package holding 3333 (Public Pool, for one) pushes ours elsewhere.
+  const ports = await sdk.host
+    .get(
+      effects,
+      { packageId: nodePackageId, hostId: nodeStratumHostId },
+      (host) => {
+        const ifaces = host
+          ? Object.values(host.bindings).flatMap((b) =>
+              Object.values(b.interfaces),
+            )
+          : []
+        return Object.entries(stratumInterfaces)
+          .map(([algo, spec]) => {
+            const match = ifaces.find((i) => i.id === spec.id)
+            const port =
+              match?.addressInfo?.filter({ kind: ['ipv4', 'mdns', 'domain'] })
+                ?.hostnames?.[0]?.port ?? spec.internalPort
+            return `${algo}=${port}`
+          })
+          .join(',')
+      },
+    )
+    .const()
+    .catch(() => '')
+
   return sdk.Daemons.of(effects).addDaemon('dashboard', {
     subcontainer: await sdk.SubContainer.of(
       effects,
@@ -65,6 +93,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
         DASH_STRATUM: `http://${stratum}`,
         DASH_RPC: rpc ? `http://${rpc}` : '',
         DASH_HEALTH: '',
+        DASH_STRATUM_PORTS: ports || '',
       },
     },
     ready: {

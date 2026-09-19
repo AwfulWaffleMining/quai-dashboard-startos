@@ -76,6 +76,11 @@ type Worker struct {
 	Samples       []Sample  `json:"samples,omitempty"`
 }
 
+// Block is one accepted submission. go-quai's stratum calls every accepted
+// submission a "block", but most are workshares: work that met the lower
+// workshare threshold and was included in someone else's block, paying a ninth
+// of the pool. Kind is resolved by comparing our hash with the canonical block
+// at that height (needs the node RPC).
 type Block struct {
 	Height    uint64    `json:"height"`
 	Hash      string    `json:"hash"`
@@ -83,6 +88,7 @@ type Block struct {
 	Algorithm string    `json:"algorithm"`
 	FoundAt   time.Time `json:"foundAt"`
 	EstReward float64   `json:"estReward"`
+	Kind      string    `json:"kind"` // workshare | block | unverified
 }
 
 type Share struct {
@@ -110,15 +116,23 @@ type NodeSummary struct {
 }
 
 type MiningSummary struct {
-	EstimatedBlockReward float64 `json:"estimatedBlockReward"`
+	EstimatedBlockReward float64 `json:"estimatedBlockReward"` // full block, ~9x a workshare
 	WorkshareReward      float64 `json:"workshareReward"`
+	BaseBlockReward      float64 `json:"baseBlockReward"`
 	AvgBlockTime         float64 `json:"avgBlockTime"`
+	// Network figures, used to show honest odds rather than guesses.
+	NetHashrate   map[string]float64 `json:"netHashrate"`
+	NetDifficulty map[string]float64 `json:"netDifficulty"`
+	AvgShareTime  map[string]float64 `json:"avgShareTime"`
 }
 
 type Summary struct {
 	Node   NodeSummary            `json:"node"`
 	Mining MiningSummary          `json:"mining"`
 	Algos  map[string]AlgoSummary `json:"algos"`
+	// Ports miners should connect to, passed in by the package because StartOS
+	// assigns them and they are not always the defaults.
+	StratumPorts map[string]int `json:"stratumPorts,omitempty"`
 }
 
 // store is everything kept on disk.
@@ -133,27 +147,30 @@ type store struct {
 }
 
 type collector struct {
-	mu       sync.RWMutex
-	st       store
-	summary  Summary
-	dataDir  string
-	stratum  string
-	health   string
-	rpc      string
-	client   *http.Client
-	lastSeen map[string]time.Time // share counters for reject-rate deltas
-	lastCnt  map[string][3]uint64
-	dirty    bool
+	mu           sync.RWMutex
+	st           store
+	summary      Summary
+	dataDir      string
+	stratum      string
+	health       string
+	rpc          string
+	client       *http.Client
+	lastSeen     map[string]time.Time // share counters for reject-rate deltas
+	lastCnt      map[string][3]uint64
+	stratumPorts map[string]int
+	dirty        bool
 }
 
 func newCollector(dataDir, stratum, health, rpc string) *collector {
 	c := &collector{
 		dataDir: dataDir, stratum: stratum, health: health, rpc: rpc,
-		client:   &http.Client{Timeout: httpTimeout},
-		lastSeen: map[string]time.Time{},
-		lastCnt:  map[string][3]uint64{},
+		stratumPorts: map[string]int{},
+		client:       &http.Client{Timeout: httpTimeout},
+		lastSeen:     map[string]time.Time{},
+		lastCnt:      map[string][3]uint64{},
 	}
 	c.st = store{
+		Blocks:  []Block{},
 		History: map[string][]Sample{}, Workers: map[string]*Worker{}, Shares: map[string][]Share{},
 		Best: map[string]float64{}, LuckSum: map[string]float64{}, LuckN: map[string]float64{},
 	}
@@ -185,6 +202,9 @@ func (c *collector) load() {
 	}
 	if s.Shares == nil {
 		s.Shares = map[string][]Share{}
+	}
+	if s.Blocks == nil {
+		s.Blocks = []Block{}
 	}
 	if s.Best == nil {
 		s.Best = map[string]float64{}
@@ -434,9 +454,13 @@ func (c *collector) poll() {
 		if b.Hash == "" || known[b.Hash] {
 			continue
 		}
+		reward := mining.WorkshareReward
+		if reward == 0 {
+			reward = mining.EstimatedBlockReward / 9 // ExpectedWorksharesPerBlock + 1
+		}
 		c.st.Blocks = append([]Block{{
 			Height: b.Height, Hash: b.Hash, Worker: b.Worker, Algorithm: b.Algorithm,
-			FoundAt: b.FoundAt, EstReward: mining.EstimatedBlockReward,
+			FoundAt: b.FoundAt, EstReward: reward, Kind: "unverified",
 		}}, c.st.Blocks...)
 		known[b.Hash] = true
 		log.Printf("dashboard: recorded block %d (%s) found by %s", b.Height, b.Algorithm, b.Worker)
@@ -455,7 +479,7 @@ func (c *collector) poll() {
 	if node.Tip < node.Height {
 		node.Tip = node.Height
 	}
-	c.summary = Summary{Node: node, Mining: mining, Algos: algoSummary}
+	c.summary = Summary{Node: node, Mining: mining, Algos: algoSummary, StratumPorts: c.stratumPorts}
 	c.dirty = true
 }
 
@@ -490,11 +514,134 @@ func (c *collector) miningInfo() MiningSummary {
 		}
 		return 0
 	}
-	return MiningSummary{
-		EstimatedBlockReward: num("estimatedBlockReward"),
-		WorkshareReward:      num("workshareReward"),
-		AvgBlockTime:         num("avgBlockTime"),
+	// Reward fields come back in wei (18 decimals). A node that already reports
+	// whole QUAI would give a small number, so only scale values big enough to
+	// be wei.
+	quai := func(k string) float64 {
+		v := num(k)
+		if v >= 1e9 {
+			return v / 1e18
+		}
+		return v
 	}
+	return MiningSummary{
+		EstimatedBlockReward: quai("estimatedBlockReward"),
+		WorkshareReward:      quai("workshareReward"),
+		BaseBlockReward:      quai("baseBlockReward"),
+		AvgBlockTime:         num("avgBlockTime"),
+		NetHashrate: map[string]float64{
+			"sha256": num("shaHashRate"), "scrypt": num("scryptHashRate"), "kawpow": num("kawpowHashRate"),
+		},
+		NetDifficulty: map[string]float64{
+			"sha256": num("shaDifficulty"), "scrypt": num("scryptDifficulty"), "kawpow": num("kawpowDifficulty"),
+		},
+		AvgShareTime: map[string]float64{
+			"sha256": num("avgShaShareTime"), "scrypt": num("avgScryptShareTime"), "kawpow": num("avgKawpowShareTime"),
+		},
+	}
+}
+
+// rpcCall makes a JSON-RPC request to the node and returns the raw result.
+func (c *collector) rpcCall(method string, params string) (json.RawMessage, error) {
+	if c.rpc == "" {
+		return nil, errors.New("no rpc configured")
+	}
+	body := strings.NewReader(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":%q,"params":%s}`, method, params))
+	req, err := http.NewRequest(http.MethodPost, c.rpc, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Result json.RawMessage `json:"result"`
+		Error  *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if out.Error != nil {
+		return nil, errors.New(out.Error.Message)
+	}
+	return out.Result, nil
+}
+
+// verifyKinds resolves whether each recorded submission was a genuine block or
+// a workshare: the canonical block at that height either has our hash or it
+// doesn't. Only possible when the node shares its RPC.
+func (c *collector) verifyKinds() {
+	if c.rpc == "" {
+		return
+	}
+	c.mu.RLock()
+	mining := c.summary.Mining
+	c.mu.RUnlock()
+	c.mu.RLock()
+	type todo struct {
+		height uint64
+		hash   string
+	}
+	var pending []todo
+	for _, b := range c.st.Blocks {
+		if b.Kind == "" || b.Kind == "unverified" {
+			pending = append(pending, todo{b.Height, b.Hash})
+		}
+	}
+	c.mu.RUnlock()
+	if len(pending) == 0 {
+		return
+	}
+	if len(pending) > 20 { // a few per poll is plenty; they are not going anywhere
+		pending = pending[:20]
+	}
+
+	kinds := map[string]string{}
+	for _, t := range pending {
+		res, err := c.rpcCall("quai_getBlockByNumber", fmt.Sprintf(`["0x%x",false]`, t.height))
+		if err != nil || len(res) == 0 || string(res) == "null" {
+			continue
+		}
+		var blk struct {
+			WoHeader struct {
+				Hash string `json:"hash"`
+			} `json:"woHeader"`
+		}
+		if err := json.Unmarshal(res, &blk); err != nil {
+			continue
+		}
+		if blk.WoHeader.Hash == "" {
+			continue
+		}
+		if strings.EqualFold(blk.WoHeader.Hash, t.hash) {
+			kinds[t.hash] = "block"
+		} else {
+			kinds[t.hash] = "workshare"
+		}
+	}
+	if len(kinds) == 0 {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.st.Blocks {
+		k, ok := kinds[c.st.Blocks[i].Hash]
+		if !ok {
+			continue
+		}
+		c.st.Blocks[i].Kind = k
+		if k == "block" && mining.EstimatedBlockReward > 0 {
+			c.st.Blocks[i].EstReward = mining.EstimatedBlockReward
+			log.Printf("dashboard: block %d was won outright by %s", c.st.Blocks[i].Height, c.st.Blocks[i].Worker)
+		}
+	}
+	c.dirty = true
 }
 
 // sample appends one hashrate point per algorithm, with the reject rate over
@@ -539,6 +686,7 @@ func (c *collector) sample() {
 
 func (c *collector) run(ctx context.Context) {
 	c.poll()
+	c.verifyKinds()
 	pollT, sampleT, saveT := time.NewTicker(pollInterval), time.NewTicker(sampleInterval), time.NewTicker(saveEvery)
 	defer pollT.Stop()
 	defer sampleT.Stop()
@@ -550,6 +698,7 @@ func (c *collector) run(ctx context.Context) {
 			return
 		case <-pollT.C:
 			c.poll()
+			c.verifyKinds()
 		case <-sampleT.C:
 			c.sample()
 		case <-saveT.C:
@@ -609,6 +758,12 @@ func (c *collector) handleWorkers(w http.ResponseWriter, r *http.Request) {
 func (c *collector) handleBlocks(w http.ResponseWriter, r *http.Request) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	// An empty Go slice marshals to null, which breaks JSON consumers that
+	// expect a list. Always send [].
+	if c.st.Blocks == nil {
+		writeJSON(w, []Block{})
+		return
+	}
 	writeJSON(w, c.st.Blocks)
 }
 
@@ -690,6 +845,17 @@ func main() {
 		rpc    = os.Getenv("DASH_RPC")
 	)
 	c := newCollector(dataDir, stratum, health, rpc)
+	// DASH_STRATUM_PORTS is "sha256=60862,scrypt=3334,kawpow=3335": the external
+	// ports StartOS assigned, so How to connect shows the truth.
+	for _, pair := range strings.Split(os.Getenv("DASH_STRATUM_PORTS"), ",") {
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			c.stratumPorts[strings.TrimSpace(k)] = n
+		}
+	}
 	for _, o := range []struct {
 		env string
 		dst *time.Duration
