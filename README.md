@@ -1,71 +1,197 @@
-# quai-dashboard-startos
+<p align="center">
+  <img src="icon.svg" alt="Quai Mining Dashboard Logo" width="21%" />
+</p>
 
-Technical reference for the `quai-dashboard` StartOS package. End-user documentation is in [instructions.md](instructions.md).
+# Quai Mining Dashboard on StartOS
 
-## What it runs
+> **Upstream docs:** <https://docs.qu.ai/>
+>
+> This package has no upstream project: the dashboard and its collector are
+> written and maintained here. Anything it reports about mining comes from the
+> [Quai Network](https://github.com/AwfulWaffleMining/go-quai-startos) package
+> on the same server, whose behavior is upstream go-quai.
 
-`dashboard/main.go`, a Go server (standard library only) that serves a single-page UI and collects mining stats from the [go-quai package](https://github.com/AwfulWaffleMining/go-quai-startos). One daemon, one volume, one UI interface on port 8080.
+A mining dashboard for the Quai Network package: hashrate with history, your
+workers, the workshares you have minted and what each was actually paid, how
+close your shares are coming, and a builder that fills in the stratum settings
+for your hardware.
 
-## Dependency contract
+It exists because go-quai keeps its mining statistics in memory only. Workers
+vanish on restart, hashrate is a ten-minute window, share history is capped, and
+the record of what you earned is lost. This package records all of it on its own
+volume, and checks each submission against the chain.
 
-`go-quai`, `kind: running`, `versionRange >=0.56.0:5`, health checks `go-quai` and `sync`: StartOS holds this service until the node is running and synced, so the dashboard never reports against a half-synced chain.
+---
 
-Addresses are resolved with `sdk.host.getBridgeAddress` against ids the node package exports (see `mainHostId` / `rpcHostId` in its `startos/utils.ts`):
+## Table of Contents
 
-| What | Host id | Port | Required |
-| --- | --- | --- | --- |
-| Stratum stats API | `main` | 3306 (falls back to 3336 for nodes before 0.56.0:7) | yes |
-| Zone RPC | `rpc` | 9200 | no: only exported when the node's RPC sharing is on |
+- [Image and Container Runtime](#image-and-container-runtime)
+- [Volume and Data Layout](#volume-and-data-layout)
+- [Installation and First-Run Flow](#installation-and-first-run-flow)
+- [Configuration Management](#configuration-management)
+- [Network Access and Interfaces](#network-access-and-interfaces)
+- [Actions](#actions)
+- [Backups and Restore](#backups-and-restore)
+- [Health Checks](#health-checks)
+- [Dependencies](#dependencies)
+- [Limitations and Differences](#limitations-and-differences)
+- [What Is Unchanged from Upstream](#what-is-unchanged-from-upstream)
+- [Contributing](#contributing)
+- [Quick Reference for AI Consumers](#quick-reference-for-ai-consumers)
 
-Without the RPC the dashboard omits `estimatedBlockReward`, `workshareReward` and `avgBlockTime`; blocks found are then recorded with no reward figure.
+---
 
-## Collector
+## Image and Container Runtime
 
-go-quai keeps stratum stats in memory only (workers vanish on restart, hashrate is a 10-minute window, share history caps at 500, blocks found are lost). The server polls every 15 s and writes `dashboard/stats.json` on the volume atomically:
-
-| Kept | Retention |
+| What | Detail |
 | --- | --- |
-| Hashrate and reject rate per algorithm, one sample a minute | 7 days |
-| Per-worker samples (24 h average), last share, offline status | worker drops 24 h after its last share |
-| Shares with difficulty and block threshold | 6000 per algorithm |
-| Submissions (workshares and blocks), their reward, and the payout that settled them | permanent |
+| Image source | Custom Dockerfile: a Go server built from source in this repository, on Alpine |
+| Architectures | x86_64 |
+| Entrypoint | The server binary |
 
-A workshare is paid by a coinbase transaction in a later block: 7 and 11 blocks in the cases measured. `findPayouts` scans up to 50 blocks after each recorded workshare for a transaction paying one of our worker addresses, then stores the amount, transaction hash and height. The payout is not in the workshare's own block, which belongs to whoever mined it.
+The server uses the Go standard library only, so the image build pulls no
+modules. The page is a single HTML file with hand-drawn SVG charts, no
+framework and no charting library, and its fonts are bundled, so it makes no
+outside requests.
 
-The lock tier is read at the same time: a workshare appears in the `workshares` array of the block that included it (its own height, or a block or two later) as a work object header carrying `lock` and `primaryCoinbase`. Boost rates come from `LockupByteToRewardsMultiple` in go-quai: 3.5/10/25% in year one, decaying linearly to 0.218/0.625/1.562% from year five.
+## Volume and Data Layout
 
-A workshare with no payout after three passes is marked `orphaned`: accepted by our stratum but never included in a block, so it earned nothing. This is real and observed, and Quai's own roadmap lists work to "cut orphan workshares". Orphans are excluded from the earnings total and counted on the Earned card, because a rising orphan rate is a latency signal worth seeing.
+One volume, `main`, mounted at `/data`.
 
-`stats.json` is written by one writer at a time, through a private temp file that is flushed to disk before replacing the old copy, and the previous copy is kept as `stats.json.bak` for load to fall back on. An earlier version shared one temp file between two concurrent saves on shutdown and lost the whole history to a truncated write.
+| Path | Contents | In backups |
+| --- | --- | --- |
+| `dashboard/stats.json` | Hashrate history, worker records, share history, and every submission with what it was paid | yes |
+| `dashboard/stats.json.bak` | Previous good copy, used if the main file is ever unreadable | yes |
 
-Each submission is classified by asking the node for the canonical block at that height: a hash match would mean we minted the block, otherwise it was a workshare included in someone else's block (reward `workshareReward`). Without the node RPC they stay unverified.
+Writes are serialised, go through a private temporary file, and are flushed to
+disk before replacing the previous copy, because this file is the only record of
+what you earned.
 
-Note that on SHA-256 and Scrypt a match cannot happen: `UncleWorkShareClassification` in go-quai only returns `types.Block` for KawPoW, so auxpow submissions are workshares by construction. The classification is kept because it is cheap, it is correct for KawPoW, and it guards against assuming.
+## Installation and First-Run Flow
 
-Environment: `DASH_ADDR`, `DASH_ASSETS`, `DASH_DATA`, `DASH_STRATUM`, `DASH_STRATUM_PORTS` (`sha256=60862,...`, the external ports StartOS assigned to the node, read with `sdk.host.get`), `DASH_RPC` (optional), `DASH_HEALTH` (optional; go-quai's `--rpc.health` endpoint, only reachable when the dashboard runs inside the node package). `DASH_SAMPLE_SECONDS` and `DASH_POLL_SECONDS` exist for tests.
+Nothing to configure. The package finds the node over the local bridge and
+starts collecting. StartOS holds it until the Quai Network package is running
+and its chain is synced, so on a fresh install it will wait, sometimes for a
+long time if the node is still syncing.
 
-## When the node goes away
+History accumulates from first start. Restarts and updates keep it.
 
-The collector counts consecutive failed polls. Eight in a row (about two minutes) and the process exits non-zero: StartOS restarts it, `checkDependencies` fails, and the service sits in the dependency state until the node is healthy again. Shorter gaps, such as a node restart for a settings change, are ridden out, with the page showing "Node unreachable" in the meantime.
+## Configuration Management
 
-## Endpoints
+| StartOS-managed | Upstream-managed |
+| --- | --- |
+| The node's address and stats API port, the assigned stratum ports shown in How to connect, and whether the node's RPC is available | Mining itself, which is configured on each miner and in the Quai Network package |
 
-Served relative, so the UI works on any StartOS address: `dash/summary`, `dash/workers`, `dash/blocks`, `dash/history?range=1h|24h|7d`, `dash/shares?range=`, `dash/export.csv?range=&algo=`, `/health`.
+The page remembers a few per-browser preferences locally: theme, selected
+algorithm, and the values typed into the connection builder.
 
-## The page
+## Network Access and Interfaces
 
-`dashboard/index.html` is a single file: hand-drawn SVG charts, no framework, no CDN, no charting library. Fonts are bundled in `dashboard/fonts` (Bai Jamjuree, Michroma, JetBrains Mono, subset to Latin, OFL). Styling follows Quai's media kit: monochrome with Quai red `#E20101`, per-algorithm colors from their supply tracker. Quai's Yapari and Monorama fonts and the Quai logo are deliberately not included.
+| Interface | Port | Protocol | Purpose |
+| --- | --- | --- | --- |
+| Mining Dashboard | 8080 | HTTP | The dashboard itself |
 
-`scripts/make-dashboard-preview.sh` produces a standalone web preview: Google Fonts instead of local files, and `dash-mode: auto`, which falls back to clearly-labelled demo data when no server answers.
+The server also answers a small set of read-only JSON endpoints on the same
+port, which the page uses: a summary, workers, submissions, hashrate history,
+share history, a CSV export of hashrate, and a health endpoint.
 
-## Building
+## Actions
 
-```sh
-npm ci
-make            # produces quai-dashboard_x86_64.s9pk
-make install    # sideloads to the server in ~/.startos/config.yaml
+None. Everything is on the page.
+
+## Backups and Restore
+
+Included: the whole volume, which is the recorded history and nothing else. It
+is small.
+
+This is worth backing up precisely because it cannot be rebuilt: the node does
+not remember its mining statistics, so a lost file means a lost record of what
+you mined, even though the coins themselves are safe on chain.
+
+## Health Checks
+
+| Check | Meaning |
+| --- | --- |
+| Dashboard | The server is listening and serving the page |
+
+If the node's stats API stops answering for about two minutes, the service exits
+and StartOS restarts it, which parks it on the dependency until the node is back.
+Shorter gaps, such as a node restart for a settings change, are ridden out, and
+the page says the node is unreachable rather than guessing at its state.
+
+## Dependencies
+
+**Quai Network** — required.
+
+| What | Detail |
+| --- | --- |
+| Health checks | The node must be running and its chain synced before this service starts |
+| Mounted volumes | None |
+| Purpose | Mining statistics come from the node's stats API. Reward figures, the classification of each submission, and lock periods come from its zone RPC when sharing is enabled |
+
+Without the node's RPC the dashboard still works: it shows estimated rewards
+instead of confirmed ones, and cannot tell which lock period a workshare used.
+
+## Limitations and Differences
+
+1. **Reward figures are estimates until the payout is found.** A workshare is
+   paid by a transaction a few blocks later; until the dashboard finds it, the
+   card shows an estimate and says so.
+2. **Confirmation and unlocking are different things.** A reward confirms in
+   seconds and may then be locked for weeks or months, depending on the lock
+   period the miner asked for.
+3. **A workshare can earn nothing.** One that is not included in a block in time
+   is orphaned, and the dashboard marks it rather than waiting forever.
+4. **Blocks are minted by KawPoW miners.** SHA-256 and Scrypt hardware mints
+   workshares, so the dashboard reports workshares rather than blocks. That is
+   Quai's design, not a limitation of this package.
+5. **No price data.** Everything is denominated in QUAI, because fetching a
+   price would mean the dashboard making outside requests.
+6. **x86_64 only**, matching the node package.
+7. **The reward classification needs the node's RPC.** Without it, submissions
+   stay unverified.
+
+## What Is Unchanged from Upstream
+
+Nothing about mining is changed: the dashboard only reads. It does not touch
+stratum, submit work, hold keys, or alter the node's behavior in any way. Every
+figure it shows can be checked against the node's own API or a block explorer.
+
+## Contributing
+
+See [AGENTS.md](AGENTS.md) for the conventions this package follows, and
+[docs/internals.md](docs/internals.md) for how the collector works.
+
+---
+
+## Quick Reference for AI Consumers
+
+```yaml
+package_id: quai-dashboard
+architectures: [x86_64]
+volumes:
+  main: /data
+ports:
+  ui: 8080
+dependencies:
+  - go-quai
+startos_managed_env_vars:
+  - DASH_ADDR
+  - DASH_ASSETS
+  - DASH_DATA
+  - DASH_STRATUM
+  - DASH_STRATUM_PORTS
+  - DASH_RPC
+  - DASH_HEALTH
+actions: []
+health_checks:
+  - dashboard
+endpoints:
+  - dash/summary
+  - dash/workers
+  - dash/blocks
+  - dash/history
+  - dash/shares
+  - dash/export.csv
+  - health
 ```
-
-## Donate
-
-Optional, and appreciated: [DONATE.md](DONATE.md).
