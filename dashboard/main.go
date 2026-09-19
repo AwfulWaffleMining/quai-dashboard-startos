@@ -677,9 +677,15 @@ func (c *collector) verifyKinds() {
 			continue
 		}
 		c.st.Blocks[i].Kind = k
-		if k == "block" && mining.EstimatedBlockReward > 0 {
+		// Correct the reward to match what this actually was. Submissions
+		// recorded before 1.1.0:0 all carried the full block reward, because
+		// the package had no way to tell a workshare from a block.
+		switch {
+		case k == "block" && mining.EstimatedBlockReward > 0:
 			c.st.Blocks[i].EstReward = mining.EstimatedBlockReward
 			log.Printf("dashboard: block %d was won outright by %s", c.st.Blocks[i].Height, c.st.Blocks[i].Worker)
+		case k == "workshare" && mining.WorkshareReward > 0:
+			c.st.Blocks[i].EstReward = mining.WorkshareReward
 		}
 	}
 	c.dirty = true

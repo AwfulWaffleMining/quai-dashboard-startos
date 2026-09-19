@@ -463,6 +463,8 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
   const short = (a) => a && a.length > 14 ? a.slice(0, 6) + '…' + a.slice(-4) : (a || '');
   const pct = (x, d = 2) => isFinite(x) ? x.toFixed(d) + '%' : '–';
+  // Percentages stop being readable past a few hundred: 21913.4% is 219x.
+  const luckStr = (x) => !isFinite(x) || x <= 0 ? '–' : x >= 1000 ? (x / 100).toFixed(0) + 'x' : pct(x, x >= 10 ? 1 : 2);
   const algoBadge = (a) => '<span class="badge" style="color:var(' + ALGO_VAR[a] + ')">' + (ALGO_NAME[a] || esc(a)) + '</span>';
   const activeCount = (k) => state.data ? state.data.workers.filter((w) => w.algorithm === k && w.status === 'active').length : 0;
 
@@ -640,7 +642,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     $('kInvalid').textContent = fmtNum(invalid);
     const rate = a.hashrate > 0 && a.workshareDiff > 0 ? a.hashrate / (a.workshareDiff * DIFF1[k]) : 0;
     $('kEta').textContent = rate > 0 ? '~' + dur(1 / rate) : '–';
-    $('kBest').textContent = a.bestLuck ? pct(a.bestLuck, 1) : '–';
+    $('kBest').textContent = luckStr(a.bestLuck);
     const rw = (d.summary.mining || {}).estimatedBlockReward;
     $('kReward').textContent = rw ? '~' + rw.toFixed(2) + ' QUAI' : '–';
 
@@ -719,7 +721,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     } else {
       $('bBlockOdds').textContent = netH ? 'connect a miner to see your odds' : 'needs the node RPC';
     }
-    $('bBest').textContent = a.bestLuck ? pct(a.bestLuck, 1) : '–';
+    $('bBest').textContent = luckStr(a.bestLuck);
 
     // rail
     $('railNote').textContent = items.length ? blocks.length + ' block' + (blocks.length === 1 ? '' : 's') + ' · ' + shares.length + ' workshares' : '';
@@ -754,7 +756,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     flat.sort((x, y) => y.luck - x.luck);
     $('bestShares').innerHTML = flat.length ? flat.slice(0, 6).map((sh) => {
       const hit = sh.luck >= 100;
-      return '<tr><td>' + algoBadge(sh.k) + '</td><td><div class="bar"><i style="width:' + Math.min(100, sh.luck).toFixed(0) + '%"></i><b' + (hit ? ' class="hit"' : '') + '>' + pct(sh.luck, sh.luck >= 10 ? 0 : 2) + (hit ? ' — cleared' : '') + '</b></div></td><td class="num">' + fmtCompact(sh.diff) + '</td><td class="num">' + ago(sh.t) + '</td></tr>';
+      return '<tr><td>' + algoBadge(sh.k) + '</td><td><div class="bar"><i style="width:' + Math.min(100, sh.luck).toFixed(0) + '%"></i><b' + (hit ? ' class="hit"' : '') + '>' + luckStr(sh.luck) + (hit ? ' — cleared' : '') + '</b></div></td><td class="num">' + fmtCompact(sh.diff) + '</td><td class="num">' + ago(sh.t) + '</td></tr>';
     }).join('') : '<tr><td colspan="4" class="empty">No shares in this range yet.</td></tr>';
   }
 
