@@ -176,7 +176,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
       <button class="tab" role="tab" data-tab="workers" aria-selected="false">Workers</button>
-      <button class="tab" role="tab" data-tab="blocks" aria-selected="false">Blocks &amp; luck</button>
+      <button class="tab" role="tab" data-tab="blocks" aria-selected="false">Earnings</button>
       <button class="tab" role="tab" data-tab="connect" aria-selected="false">How to connect</button>
     </div>
   </nav>
@@ -212,7 +212,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
         <div class="kv"><span>stale <b id="kStale">0</b></span><span>invalid <b id="kInvalid">0</b></span><span id="kSince">–</span></div>
       </div>
       <div class="card">
-        <div class="label">Next block (estimate)</div>
+        <div class="label">Next workshare (estimate)</div>
         <div class="big" id="kEta">–</div>
         <div class="kv"><span>best share <b id="kBest">–</b></span><span>reward <b id="kReward">–</b></span></div>
       </div>
@@ -242,7 +242,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
         <div class="tablewrap"><table><thead><tr><th>Worker</th><th>Algo</th><th class="num">Hashrate</th><th class="num">Last share</th></tr></thead><tbody id="topWorkers"></tbody></table></div>
       </div>
       <div class="card">
-        <div class="card-h"><h2 id="recentTitle">Recent blocks</h2><button class="copy" data-goto="blocks">blocks &amp; luck</button></div>
+        <div class="card-h"><h2 id="recentTitle">Recent workshares</h2><button class="copy" data-goto="blocks">earnings</button></div>
         <div class="tablewrap"><table><thead><tr><th>Height</th><th>Algo</th><th>Worker</th><th class="num">Found</th></tr></thead><tbody id="recentBlocks"></tbody></table></div>
       </div>
     </div>
@@ -279,14 +279,14 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
   <section id="tab-blocks" class="hidden">
     <div class="grid g4">
       <div class="card accent">
-        <div class="label">Workshares</div>
+        <div class="label">Workshares minted</div>
         <div class="big" id="bShares">0</div>
         <div class="kv"><span id="bShareRate">–</span></div>
       </div>
       <div class="card">
-        <div class="label">Blocks won outright</div>
-        <div class="big" id="bBlocks">0</div>
-        <div class="kv"><span id="bBlockOdds">–</span></div>
+        <div class="label">Reward per workshare</div>
+        <div class="big" id="bPerShare">–</div>
+        <div class="kv"><span id="bPoolNote">a share of each block's reward pool</span></div>
       </div>
       <div class="card">
         <div class="label">Earned</div>
@@ -301,9 +301,9 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     </div>
 
     <div class="card" style="margin-top:12px">
-      <div class="card-h"><h2 id="railTitle">Your workshares and blocks</h2><span class="label" id="railNote"></span></div>
+      <div class="card-h"><h2 id="railTitle">Your workshares</h2><span class="label" id="railNote"></span></div>
       <div class="rail" id="blockRail"></div>
-      <p class="hint">A share that meets the <b>workshare threshold</b> is included in someone else's block and pays a ninth of the pool. A share that meets the <b>full block difficulty</b> wins the block and the whole pool. Both come from the same hashing on your node.</p>
+      <p class="hint">Blocks on Quai are minted by KawPoW miners. SHA-256 and Scrypt hardware mints <b>workshares</b>: subsamples of hashrate that meet a lower threshold, get included in a block, and earn a share of that block's reward pool. Workshares are what make PoEM's finality work, which is why the protocol pays for them.</p>
     </div>
 
     <div class="grid g2" style="margin-top:12px">
@@ -678,13 +678,13 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     drawPerf();
 
     $('topTitle').textContent = 'Top ' + ALGO_NAME[k] + ' workers';
-    $('recentTitle').textContent = 'Recent ' + ALGO_NAME[k] + ' blocks';
+    $('recentTitle').textContent = 'Recent ' + ALGO_NAME[k] + ' workshares';
     const top = ws.slice().sort((x, y) => y.hashrate - x.hashrate).slice(0, 6);
     $('topWorkers').innerHTML = top.length ? top.map((w) => '<tr><td>' + esc(w.workerName || 'default') + '</td><td>' + algoBadge(w.algorithm) + '</td><td class="num">' + hashStr(w.hashrate) + '</td><td class="num">' + ago(w.lastShareAt) + '</td></tr>').join('')
       : '<tr><td colspan="4" class="empty">No ' + ALGO_NAME[k] + ' miners yet. Open How to connect to point one here.</td></tr>';
     const bl = d.blocks.filter((b) => b.algorithm === k).slice(0, 5);
     $('recentBlocks').innerHTML = bl.length ? bl.map((b) => '<tr><td class="mono">#' + fmtNum(b.height) + '</td><td>' + algoBadge(b.algorithm) + '</td><td>' + esc(b.worker) + '</td><td class="num">' + ago(b.foundAt) + '</td></tr>').join('')
-      : '<tr><td colspan="4" class="empty">No ' + ALGO_NAME[k] + ' blocks yet. Keep hashing.</td></tr>';
+      : '<tr><td colspan="4" class="empty">No ' + ALGO_NAME[k] + ' workshares yet. Keep hashing.</td></tr>';
   }
 
   function renderWorkers() {
@@ -711,12 +711,17 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     const shares = items.filter((b) => b.kind !== 'block');
     const m = d.summary.mining || {};
 
-    $('bShares').textContent = fmtNum(shares.length);
-    $('bBlocks').textContent = fmtNum(blocks.length);
+    $('bShares').textContent = fmtNum(shares.length + blocks.length);
+    $('bPerShare').innerHTML = m.workshareReward
+      ? esc(m.workshareReward.toFixed(2)) + '<small>QUAI</small>'
+      : '–';
+    $('bPoolNote').textContent = m.estimatedBlockReward
+      ? 'one of ' + Math.round(m.estimatedBlockReward / Math.max(1e-9, m.workshareReward)) + ' slots in a ' + m.estimatedBlockReward.toFixed(0) + ' QUAI pool'
+      : "a share of each block's reward pool";
     const earned = items.reduce((s, b) => s + (b.estReward || 0), 0);
     $('bEarned').innerHTML = esc(earned.toFixed(2)) + '<small>QUAI</small>';
     $('bEarnedSplit').innerHTML = m.workshareReward
-      ? 'workshare <b>' + m.workshareReward.toFixed(2) + '</b> · block <b>' + (m.estimatedBlockReward || 0).toFixed(2) + '</b>'
+      ? 'at <b>' + m.workshareReward.toFixed(2) + '</b> QUAI per workshare'
       : 'reward figures need the node RPC';
 
     // rate of workshares, measured against what this hashrate should produce
@@ -739,24 +744,14 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     $('dryFill').style.width = expectedGap ? Math.min(100, (100 * since) / (2 * expectedGap)).toFixed(1) + '%' : '0%';
     $('bShareRate').innerHTML = expectedGap ? 'about one every <b>' + dur(expectedGap) + '</b>' : 'connect a miner to see your rate';
 
-    // Odds of winning a block outright. A block pays 9x a workshare and is about
-    // 9x rarer: both follow ExpectedWorksharesPerBlock + 1 in go-quai. Deriving
-    // it from the measured workshare gap keeps the two consistent.
-    const SHARES_PER_BLOCK = m.workshareReward > 0 && m.estimatedBlockReward > 0
-      ? m.estimatedBlockReward / m.workshareReward
-      : 9;
-    if (expectedGap > 0) {
-      $('bBlockOdds').innerHTML = 'about one every <b>' + dur(expectedGap * SHARES_PER_BLOCK) + '</b> at this hashrate';
-    } else {
-      $('bBlockOdds').textContent = netH ? 'connect a miner to see your odds' : 'needs the node RPC';
-    }
+
     $('bBest').textContent = luckStr(a.bestLuck);
 
     // rail
-    $('railNote').textContent = items.length ? blocks.length + ' block' + (blocks.length === 1 ? '' : 's') + ' · ' + shares.length + ' workshares' : '';
+    $('railNote').textContent = items.length ? fmtNum(items.length) + ' minted · ' + esc(earned.toFixed(2)) + ' QUAI' : '';
     $('blockRail').innerHTML = items.length ? items.slice(0, 40).map((b) => {
       const kind = b.kind || 'unverified';
-      const label = kind === 'block' ? 'block won' : kind === 'workshare' ? 'workshare' : 'unverified';
+      const label = kind === 'block' ? 'block' : kind === 'workshare' ? 'workshare' : 'confirming';
       return '<div class="blk ' + kind + '">' +
         '<span class="st">' + label + '</span>' +
         '<div class="h">#' + fmtNum(b.height) + '</div>' +

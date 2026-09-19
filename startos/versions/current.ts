@@ -1,10 +1,10 @@
 import { VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '1.1.0:8',
+  version: '1.1.0:9',
   releaseNotes: {
     en_US:
-      '"Shares this session" now means since you opened the page, which is what it always looked like it meant. It previously showed the node\'s own counters, which start when the node does and reset when it restarts. Counting from page load makes it useful for tuning: change a miner\'s clocks and watch the shares and reject rate that follow. There is a reset link to start counting again without reloading, the card shows how long it has been counting, and if the node restarts mid-session the count re-anchors instead of going negative.',
+      "Calls things what they are. Blocks on Quai are minted by KawPoW miners; SHA-256 and Scrypt hardware mints workshares, which are included in a block and earn a share of its reward pool. The tab is now Earnings and counts workshares minted, with the reward per workshare and how many slots make up a block's pool. The \"blocks won outright\" card and its odds are gone, because that outcome is not reachable with SHA-256 or Scrypt hardware, and the estimate on the Dashboard is labelled as the next workshare rather than the next block. Quai's own tooling calls these blocks; this package does not.",
   },
   migrations: {},
 })
