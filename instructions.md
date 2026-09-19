@@ -19,6 +19,10 @@ To turn it on, open the **Quai Network** service, run the **Settings** action, a
 - **Earnings**: your workshares and blocks. A share that meets the **workshare threshold** is included in someone else's block and pays about a ninth of the reward pool; a share that meets the **full block difficulty** wins the block and the whole pool. The tab shows both, how long since your last workshare against the typical gap, your odds of a block at your hashrate, how close your shares are coming, and your best ones.
 - **How to connect**: fills in the pool URL, username and password for your hardware, including a suggested fixed difficulty and the lock period.
 
+## If the node stops
+
+The dashboard needs the node. Stop Quai Network and the dashboard will shut down within a couple of minutes and show that it is waiting on it; it starts again by itself once the node is running and synced. A brief node restart doesn't interrupt it.
+
 ## What it keeps
 
 go-quai forgets its mining stats whenever it restarts. This package records them on its own volume:

@@ -44,6 +44,9 @@ const (
 	fileMode      = 0o644
 	dirMode       = 0o755
 	csvMaxRecords = 20000
+	// ~2 minutes at the default poll interval: long enough to ride out a node
+	// restart, short enough that a stopped node is reflected promptly.
+	maxPollFailures = 8
 )
 
 func env(key, def string) string {
@@ -162,6 +165,13 @@ type collector struct {
 	lastCnt      map[string][3]uint64
 	stratumPorts map[string]int
 	dirty        bool
+	// Consecutive failed polls. The dashboard is useless without the node, so
+	// after a short grace period it exits and lets StartOS restart it: the
+	// dependency check then parks the service until the node is back, instead
+	// of leaving a live-looking page that cannot see anything.
+	failures int
+	giveUp   func()
+	gaveUp   bool
 }
 
 func newCollector(dataDir, stratum, health, rpc string) *collector {
@@ -324,12 +334,24 @@ func workerKey(w rawWorker) string {
 func (c *collector) poll() {
 	var ov poolOverview
 	if err := c.getJSON(c.stratum+"/api/pool/stats", &ov); err != nil {
-		log.Printf("dashboard: stratum stats unavailable at %s: %v", c.stratum, err)
 		c.mu.Lock()
 		c.summary.StratumOK = false
+		c.failures++
+		n := c.failures
 		c.mu.Unlock()
+		log.Printf("dashboard: stratum stats unavailable at %s (attempt %d): %v", c.stratum, n, err)
+		if n >= maxPollFailures && c.giveUp != nil {
+			log.Printf("dashboard: the Quai node has not answered for %d polls; stopping so StartOS can restart us when it is back", n)
+			c.mu.Lock()
+			c.gaveUp = true
+			c.mu.Unlock()
+			c.giveUp()
+		}
 		return
 	}
+	c.mu.Lock()
+	c.failures = 0
+	c.mu.Unlock()
 	var raws []rawWorker
 	if err := c.getJSON(c.stratum+"/api/pool/workers", &raws); err != nil {
 		log.Printf("dashboard: stratum workers unavailable: %v", err)
@@ -873,6 +895,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	c.giveUp = stop // unreachable node: shut down cleanly and let StartOS restart us
 	go c.run(ctx)
 
 	mux := http.NewServeMux()
@@ -905,5 +928,14 @@ func main() {
 		log.Fatalf("dashboard: %v", err)
 	}
 	c.save()
+	c.mu.RLock()
+	gaveUp := c.gaveUp
+	c.mu.RUnlock()
+	if gaveUp {
+		// Exit non-zero: this is a failure (the node went away), not a stop
+		// requested by the user, and StartOS should restart us for it.
+		log.Printf("dashboard: stopped because the Quai node is unreachable")
+		os.Exit(1)
+	}
 	log.Printf("dashboard: stopped")
 }

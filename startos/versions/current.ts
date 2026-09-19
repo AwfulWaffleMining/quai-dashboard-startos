@@ -1,10 +1,10 @@
 import { VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '1.1.0:1',
+  version: '1.1.0:2',
   releaseNotes: {
     en_US:
-      "Fixes the dashboard going blank against Quai Network 0.56.0:7. That release moved the node's stats API from port 3336 to 3306, and the dashboard was still asking for the old one, so it could not reach the node and wrongly reported it as syncing with no blocks. It now tries the new port and falls back to the old one, and when the node genuinely cannot be reached it says so plainly instead of pretending to know the sync state.",
+      'Stops when the node does. Stopping Quai Network used to leave the dashboard running and showing figures it could no longer refresh. It now rides out a node restart, but if the node stays unreachable for about two minutes it shuts down, so StartOS restarts it and shows it as waiting on Quai Network until the node is back.',
   },
   migrations: {},
 })

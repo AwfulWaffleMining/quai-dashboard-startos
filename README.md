@@ -34,6 +34,10 @@ Each submission is classified by asking the node for the canonical block at that
 
 Environment: `DASH_ADDR`, `DASH_ASSETS`, `DASH_DATA`, `DASH_STRATUM`, `DASH_STRATUM_PORTS` (`sha256=60862,...`, the external ports StartOS assigned to the node, read with `sdk.host.get`), `DASH_RPC` (optional), `DASH_HEALTH` (optional; go-quai's `--rpc.health` endpoint, only reachable when the dashboard runs inside the node package). `DASH_SAMPLE_SECONDS` and `DASH_POLL_SECONDS` exist for tests.
 
+## When the node goes away
+
+The collector counts consecutive failed polls. Eight in a row (about two minutes) and the process exits non-zero: StartOS restarts it, `checkDependencies` fails, and the service sits in the dependency state until the node is healthy again. Shorter gaps, such as a node restart for a settings change, are ridden out, with the page showing "Node unreachable" in the meantime.
+
 ## Endpoints
 
 Served relative, so the UI works on any StartOS address: `dash/summary`, `dash/workers`, `dash/blocks`, `dash/history?range=1h|24h|7d`, `dash/shares?range=`, `dash/export.csv?range=&algo=`, `/health`.
