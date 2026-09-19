@@ -825,10 +825,10 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
         ? 'since ' + new Date(oldest).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · rolling 12 months'
         : 'rolling 12 months';
     $('lockCards').innerHTML = LOCKS.map((L) => {
-      const mine = paidItems.filter((b) => (b.lock ?? -1) === L.n);
+      const mine = paidItems.filter((b) => b.lockRead && b.lock === L.n);
       const base = mine.reduce((s, b) => s + (b.paidReward || b.estReward || 0), 0);
       const boosted = base * L.y1;
-      const unknown = L.n === 0 ? inWindow.filter((b) => (b.lock ?? -1) < 0).length : 0;
+      const unknown = L.n === 0 ? inWindow.filter((b) => !b.lockRead).length : 0;
       return (
         '<div class="card" style="padding:14px 16px' + (mine.length ? ';border-color:var(--red-line)' : '') + '">' +
         '<div class="label">' + L.name + '</div>' +

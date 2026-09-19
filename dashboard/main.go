@@ -115,6 +115,9 @@ type Block struct {
 	// in the block that included it: 0 = no lock (2 weeks), 1 = 3 months,
 	// 2 = 6 months, 3 = 12 months. -1 means we have not read it yet.
 	Lock int `json:"lock"`
+	// Whether Lock was actually read from the chain. Without it an unread value
+	// (Go's zero) is indistinguishable from a genuine "no lock".
+	LockRead bool `json:"lockRead,omitempty"`
 }
 
 type Share struct {
@@ -694,11 +697,14 @@ func (c *collector) verifyKinds() {
 	type todo struct {
 		height uint64
 		hash   string
+		kind   string
 	}
 	var pending []todo
 	for _, b := range c.st.Blocks {
-		if b.Kind == "" || b.Kind == "unverified" {
-			pending = append(pending, todo{b.Height, b.Hash})
+		// Needs its kind resolved, or its lock tier read: anything recorded
+		// before 1.1.0:13 has no lock stored, whatever its kind.
+		if b.Kind == "" || b.Kind == "unverified" || !b.LockRead {
+			pending = append(pending, todo{b.Height, b.Hash, b.Kind})
 		}
 	}
 	c.mu.RUnlock()
@@ -739,7 +745,7 @@ func (c *collector) verifyKinds() {
 			if err := json.Unmarshal(res, &blk); err != nil {
 				continue
 			}
-			if off == 0 && blk.WoHeader.Hash != "" {
+			if off == 0 && blk.WoHeader.Hash != "" && (t.kind == "" || t.kind == "unverified") {
 				if strings.EqualFold(blk.WoHeader.Hash, t.hash) {
 					kinds[t.hash] = "block"
 				} else {
@@ -786,6 +792,8 @@ func (c *collector) verifyKinds() {
 	for i := range c.st.Blocks {
 		if l, ok := locks[c.st.Blocks[i].Hash]; ok {
 			c.st.Blocks[i].Lock = l
+			c.st.Blocks[i].LockRead = true
+			c.dirty = true
 		}
 		k, ok := kinds[c.st.Blocks[i].Hash]
 		if !ok {
