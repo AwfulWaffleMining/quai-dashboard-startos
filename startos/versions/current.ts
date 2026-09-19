@@ -1,10 +1,10 @@
 import { VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '1.1.0:5',
+  version: '1.1.0:6',
   releaseNotes: {
     en_US:
-      'Corrects rewards on older submissions. Anything recorded before this package could tell a workshare from a block was stored with the full block reward, roughly 99 QUAI instead of 11, which inflated the Earned total. Each one is now corrected to match what it actually was once the node confirms it. Very lucky shares also read as a multiple (219x) rather than an unreadable percentage (21913.4%).',
+      'Actually corrects the Earned total this time. The previous release only fixed submissions that had not been classified yet, so workshares already labelled by an earlier version kept the block-sized reward they were recorded with. Any workshare carrying a reward several times larger than a workshare pays is now corrected.',
   },
   migrations: {},
 })

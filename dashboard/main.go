@@ -635,9 +635,7 @@ func (c *collector) verifyKinds() {
 		}
 	}
 	c.mu.RUnlock()
-	if len(pending) == 0 {
-		return
-	}
+	// note: still run the repair pass below even when nothing needs classifying
 	if len(pending) > 20 { // a few per poll is plenty; they are not going anywhere
 		pending = pending[:20]
 	}
@@ -665,12 +663,27 @@ func (c *collector) verifyKinds() {
 			kinds[t.hash] = "workshare"
 		}
 	}
-	if len(kinds) == 0 {
-		return
-	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Submissions classified by an earlier version kept the reward they were
+	// recorded with, which before the workshare/block split was always the full
+	// block reward. Correct any workshare still carrying one.
+	if mining.WorkshareReward > 0 {
+		repaired := 0
+		for i := range c.st.Blocks {
+			if c.st.Blocks[i].Kind == "workshare" && c.st.Blocks[i].EstReward > 3*mining.WorkshareReward {
+				c.st.Blocks[i].EstReward = mining.WorkshareReward
+				repaired++
+			}
+		}
+		if repaired > 0 {
+			c.dirty = true
+			log.Printf("dashboard: corrected %d workshare rewards that were recorded as block rewards", repaired)
+		}
+	}
+
 	for i := range c.st.Blocks {
 		k, ok := kinds[c.st.Blocks[i].Hash]
 		if !ok {
