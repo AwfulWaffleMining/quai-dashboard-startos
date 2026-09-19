@@ -382,9 +382,9 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
           </div>
           <p class="hint" style="margin-top:12px">Use the server's LAN address shown in StartOS if this page was opened through another address. Rewards go 100% to the payout address; there are no pool fees.</p>
           <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px">
-            <div class="card" style="padding:10px 12px"><div class="label">SHA-256</div><div class="mono">:3333</div></div>
-            <div class="card" style="padding:10px 12px"><div class="label">Scrypt</div><div class="mono">:3334</div></div>
-            <div class="card" style="padding:10px 12px"><div class="label">KawPoW</div><div class="mono">:3335</div></div>
+            <div class="card" style="padding:10px 12px"><div class="label">SHA-256</div><div class="mono" id="pSha">–</div></div>
+            <div class="card" style="padding:10px 12px"><div class="label">Scrypt</div><div class="mono" id="pScrypt">–</div></div>
+            <div class="card" style="padding:10px 12px"><div class="label">KawPoW</div><div class="mono" id="pKawpow">–</div></div>
           </div>
         </div>
       </div>
@@ -854,7 +854,12 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
       } else { $('cDiffHint').textContent = 'enter your hashrate to calculate d' }
     }
     if (cfg.lock !== '0') parts.push('lock=' + cfg.lock);
-    $('oPass').textContent = parts.length ? parts.join(',') : 'x';
+    // '_' rather than ',': go-quai accepts either, but Canaan/Avalon firmware
+    // will not accept a comma in the password field.
+    $('oPass').textContent = parts.length ? parts.join('_') : 'x';
+    $('pSha').textContent = ':' + PORT.sha256;
+    $('pScrypt').textContent = ':' + PORT.scrypt;
+    $('pKawpow').textContent = ':' + PORT.kawpow;
   }
 
   // ── wiring ──────────────────────────────────────────────────────────────
