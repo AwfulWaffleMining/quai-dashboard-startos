@@ -111,6 +111,10 @@ type Block struct {
 	// pending until the payout is found, paid once it is, orphaned when the
 	// search window closes without one. An orphaned workshare earns nothing.
 	PayoutState string `json:"payoutState,omitempty"`
+	// Lock tier taken from the work object header of the workshare, as recorded
+	// in the block that included it: 0 = no lock (2 weeks), 1 = 3 months,
+	// 2 = 6 months, 3 = 12 months. -1 means we have not read it yet.
+	Lock int `json:"lock"`
 }
 
 type Share struct {
@@ -564,7 +568,7 @@ func (c *collector) poll() {
 		}
 		c.st.Blocks = append([]Block{{
 			Height: b.Height, Hash: b.Hash, Worker: b.Worker, Algorithm: b.Algorithm,
-			FoundAt: b.FoundAt, EstReward: reward, Kind: "unverified",
+			FoundAt: b.FoundAt, EstReward: reward, Kind: "unverified", Lock: -1,
 		}}, c.st.Blocks...)
 		known[b.Hash] = true
 		log.Printf("dashboard: recorded block %d (%s) found by %s", b.Height, b.Algorithm, b.Worker)
@@ -704,26 +708,58 @@ func (c *collector) verifyKinds() {
 	}
 
 	kinds := map[string]string{}
+	locks := map[string]int{}
+	c.mu.RLock()
+	addrs := map[string]bool{}
+	for _, w := range c.st.Workers {
+		if w.Address != "" {
+			addrs[strings.ToLower(w.Address)] = true
+		}
+	}
+	c.mu.RUnlock()
+
 	for _, t := range pending {
-		res, err := c.rpcCall("quai_getBlockByNumber", fmt.Sprintf(`["0x%x",false]`, t.height))
-		if err != nil || len(res) == 0 || string(res) == "null" {
-			continue
-		}
-		var blk struct {
-			WoHeader struct {
-				Hash string `json:"hash"`
-			} `json:"woHeader"`
-		}
-		if err := json.Unmarshal(res, &blk); err != nil {
-			continue
-		}
-		if blk.WoHeader.Hash == "" {
-			continue
-		}
-		if strings.EqualFold(blk.WoHeader.Hash, t.hash) {
-			kinds[t.hash] = "block"
-		} else {
-			kinds[t.hash] = "workshare"
+		// A workshare is listed in the block that included it, which is its own
+		// height or a block or two later, with the lock tier in its header.
+		for off := uint64(0); off <= 3; off++ {
+			res, err := c.rpcCall("quai_getBlockByNumber", fmt.Sprintf(`["0x%x",false]`, t.height+off))
+			if err != nil || len(res) == 0 || string(res) == "null" {
+				continue
+			}
+			var blk struct {
+				WoHeader struct {
+					Hash string `json:"hash"`
+				} `json:"woHeader"`
+				Workshares []struct {
+					PrimaryCoinbase string `json:"primaryCoinbase"`
+					Lock            string `json:"lock"`
+					Hash            string `json:"hash"`
+				} `json:"workshares"`
+			}
+			if err := json.Unmarshal(res, &blk); err != nil {
+				continue
+			}
+			if off == 0 && blk.WoHeader.Hash != "" {
+				if strings.EqualFold(blk.WoHeader.Hash, t.hash) {
+					kinds[t.hash] = "block"
+				} else {
+					kinds[t.hash] = "workshare"
+				}
+			}
+			for _, w := range blk.Workshares {
+				if !addrs[strings.ToLower(w.PrimaryCoinbase)] {
+					continue
+				}
+				if w.Hash != "" && !strings.EqualFold(w.Hash, t.hash) {
+					continue // a different workshare of ours in the same block
+				}
+				if n, err := strconv.ParseUint(strings.TrimPrefix(w.Lock, "0x"), 16, 8); err == nil {
+					locks[t.hash] = int(n)
+				}
+			}
+			if _, ok := locks[t.hash]; ok {
+				break
+			}
 		}
 	}
 
@@ -748,6 +784,9 @@ func (c *collector) verifyKinds() {
 	}
 
 	for i := range c.st.Blocks {
+		if l, ok := locks[c.st.Blocks[i].Hash]; ok {
+			c.st.Blocks[i].Lock = l
+		}
 		k, ok := kinds[c.st.Blocks[i].Hash]
 		if !ok {
 			continue

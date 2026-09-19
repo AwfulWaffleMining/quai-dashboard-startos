@@ -1,10 +1,10 @@
 import { VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '1.1.0:12',
+  version: '1.1.0:14',
   releaseNotes: {
     en_US:
-      'Shows workshares that were never rewarded. A workshare accepted by your node still has to be included in a block to earn, and one that arrives too late is orphaned and pays nothing. The search for a payout now covers 50 blocks, and a workshare with no payout by then is marked "not rewarded" instead of waiting forever, is greyed out, and is left out of the Earned total. The Earned card also counts them, so an orphan rate that starts climbing is visible: it usually means shares are reaching the node too slowly.',
+      'The lock period breakdown covers a rolling twelve months, matching the longest lock, while the charts keep their 1H, 24H and 7D switch. Until the package has been running a year the cards say what date they start from, so a partial window is not mistaken for a full one.',
   },
   migrations: {},
 })

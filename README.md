@@ -32,6 +32,8 @@ go-quai keeps stratum stats in memory only (workers vanish on restart, hashrate 
 
 A workshare is paid by a coinbase transaction in a later block: 7 and 11 blocks in the cases measured. `findPayouts` scans up to 50 blocks after each recorded workshare for a transaction paying one of our worker addresses, then stores the amount, transaction hash and height. The payout is not in the workshare's own block, which belongs to whoever mined it.
 
+The lock tier is read at the same time: a workshare appears in the `workshares` array of the block that included it (its own height, or a block or two later) as a work object header carrying `lock` and `primaryCoinbase`. Boost rates come from `LockupByteToRewardsMultiple` in go-quai: 3.5/10/25% in year one, decaying linearly to 0.218/0.625/1.562% from year five.
+
 A workshare with no payout after three passes is marked `orphaned`: accepted by our stratum but never included in a block, so it earned nothing. This is real and observed, and Quai's own roadmap lists work to "cut orphan workshares". Orphans are excluded from the earnings total and counted on the Earned card, because a rising orphan rate is a latency signal worth seeing.
 
 `stats.json` is written by one writer at a time, through a private temp file that is flushed to disk before replacing the old copy, and the previous copy is kept as `stats.json.bak` for load to fall back on. An earlier version shared one temp file between two concurrent saves on shutdown and lost the whole history to a truncated write.

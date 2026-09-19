@@ -331,6 +331,15 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     </div>
 
     <div class="card" style="margin-top:12px">
+      <div class="card-h">
+        <h2>By lock period</h2>
+        <span class="label" id="lockWindow">rolling 12 months</span>
+      </div>
+      <div class="grid g4" id="lockCards"></div>
+      <p class="hint">Set with the password when a miner connects: no <code>lock=</code> keeps rewards locked two weeks at the base rate; <code>lock=1</code>, <code>lock=2</code> and <code>lock=3</code> lock them for 3, 6 or 12 months and pay more. The boost is 3.5%, 10% and 25% in the first year, decaying to 0.218%, 0.625% and 1.562% from year five.</p>
+    </div>
+
+    <div class="card" style="margin-top:12px">
       <div class="card-h"><h2>Best shares</h2><span class="label">closest to the threshold</span></div>
       <div class="tablewrap"><table><thead><tr><th>Worker</th><th>How close</th><th class="num">Share difficulty</th><th class="num">When</th></tr></thead><tbody id="bestShares"></tbody></table></div>
     </div>
@@ -796,6 +805,44 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
     $('histNote').textContent = all.length ? fmtNum(all.length) + ' shares · ' + state.shareRange : 'no shares yet';
     $('histBars').innerHTML = buckets.map((n, i) =>
       '<div class="col"><span class="n">' + fmtNum(n) + '</span><div class="b' + (i === 4 ? ' win' : '') + '" style="height:' + Math.max(2, (100 * n) / peak).toFixed(1) + '%"></div><span class="lab">' + labels[i] + '</span></div>').join('');
+
+    // by lock period: the multiples come from LockupByteToRewardsMultiple in
+    // go-quai, first-year value and the terminal rate from year five.
+    const LOCKS = [
+      { n: 0, name: 'No lock', hold: '2 weeks', y1: 1, term: 1 },
+      { n: 1, name: '3 months', hold: '3 months', y1: 1.035, term: 1.00218 },
+      { n: 2, name: '6 months', hold: '6 months', y1: 1.1, term: 1.00625 },
+      { n: 3, name: '12 months', hold: '12 months', y1: 1.25, term: 1.01562 },
+    ];
+    // Rolling 12 months: the tiers are about accumulation, not the live view, and
+    // twelve months matches the longest lock. Orphans earned nothing, so they are out.
+    const yearAgo = Date.now() - 365 * 86400e3;
+    const inWindow = items.filter((b) => new Date(b.foundAt).getTime() >= yearAgo);
+    const paidItems = inWindow.filter((b) => b.paidReward > 0 || b.payoutState !== 'orphaned');
+    const oldest = items.length ? Math.min(...items.map((b) => new Date(b.foundAt).getTime())) : Date.now();
+    $('lockWindow').textContent =
+      oldest > yearAgo
+        ? 'since ' + new Date(oldest).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · rolling 12 months'
+        : 'rolling 12 months';
+    $('lockCards').innerHTML = LOCKS.map((L) => {
+      const mine = paidItems.filter((b) => (b.lock ?? -1) === L.n);
+      const base = mine.reduce((s, b) => s + (b.paidReward || b.estReward || 0), 0);
+      const boosted = base * L.y1;
+      const unknown = L.n === 0 ? inWindow.filter((b) => (b.lock ?? -1) < 0).length : 0;
+      return (
+        '<div class="card" style="padding:14px 16px' + (mine.length ? ';border-color:var(--red-line)' : '') + '">' +
+        '<div class="label">' + L.name + '</div>' +
+        '<div class="big" style="font-size:22px">' + fmtNum(mine.length) + ' <span class="label">minted</span></div>' +
+        '<div class="kv" style="display:block;line-height:1.9">' +
+        '<span>earned <b>' + base.toFixed(2) + '</b> QUAI</span><br>' +
+        (L.n === 0
+          ? '<span>no boost · unlocks after ' + L.hold + '</span>'
+          : '<span>with boost <b>' + boosted.toFixed(2) + '</b> QUAI</span><br><span>+' +
+            ((L.y1 - 1) * 100).toFixed(1) + '% now, +' + ((L.term - 1) * 100).toFixed(3) + '% from year 5 · locked ' + L.hold + '</span>') +
+        (unknown ? '<br><span class="dim">' + unknown + ' still being read</span>' : '') +
+        '</div></div>'
+      );
+    }).join('');
 
     // best shares
     const flat = [];
