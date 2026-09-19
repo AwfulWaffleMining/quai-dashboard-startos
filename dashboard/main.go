@@ -228,7 +228,20 @@ func (c *collector) load() {
 	if s.LuckN == nil {
 		s.LuckN = map[string]float64{}
 	}
+	// Versions before 1.1.0:1 stored rewards straight from the node in wei.
+	// Rescale them once on load so totals are not dominated by 1e19-sized values.
+	fixed := 0
+	for i := range s.Blocks {
+		if s.Blocks[i].EstReward >= 1e9 {
+			s.Blocks[i].EstReward /= 1e18
+			fixed++
+		}
+	}
 	c.st = s
+	if fixed > 0 {
+		c.dirty = true
+		log.Printf("dashboard: rescaled %d rewards recorded in wei", fixed)
+	}
 	log.Printf("dashboard: loaded %d blocks, %d workers from %s", len(s.Blocks), len(s.Workers), c.path())
 }
 
