@@ -421,6 +421,10 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
 (function () {
   'use strict';
   const MODE = (document.querySelector('meta[name="dash-mode"]') || {}).content || 'auto';
+  // Quai Network points people at explorer.qu.ai rather than quaiscan, which
+  // may not stay up. Both are Blockscout, so the /tx/ and /address/ paths match;
+  // this is the only place the explorer is named.
+  const EXPLORER = 'https://explorer.qu.ai';
   const ALGOS = ['sha256', 'scrypt', 'kawpow'];
   const ALGO_NAME = { sha256: 'SHA-256', scrypt: 'Scrypt', kawpow: 'KawPoW' };
   const ALGO_VAR = { sha256: '--sha', scrypt: '--scrypt', kawpow: '--kawpow' };
@@ -780,7 +784,7 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display
       // Link to the transaction that paid us once it is on chain; until then the
       // reward is earned but not yet confirmed, so there is nothing to point at.
       const link = paid
-        ? '<a href="https://quaiscan.io/tx/' + esc(b.paidTx) + '" target="_blank" rel="noopener noreferrer">paid in ' + fmtNum(b.paidHeight) + '</a>'
+        ? '<a href="' + EXPLORER + '/tx/' + esc(b.paidTx) + '" target="_blank" rel="noopener noreferrer">paid in ' + fmtNum(b.paidHeight) + '</a>'
         : orphaned
           ? '<span class="orph" title="Accepted by your node but not included in a block in time to earn">not rewarded</span>'
           : '<span class="dim">awaiting confirmation</span>';
