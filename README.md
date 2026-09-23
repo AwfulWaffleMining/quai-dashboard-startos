@@ -97,7 +97,21 @@ share history, a CSV export of hashrate, and a health endpoint.
 
 ## Actions
 
-None. Everything is on the page.
+**Confirmed rewards** — visible, available in any status.
+
+Asked once as a task at install. Decides whether the dashboard may use the
+node's RPC to classify each submission and report what it actually paid.
+
+Answering yes raises a task on the Quai Network package with RPC sharing
+pre-ticked; you approve it there. A dependency should not quietly change a
+setting on the service it depends on, least of all one that exposes an
+unauthenticated RPC.
+
+Answering no is remembered and not asked again. The dashboard runs either way:
+without the RPC it shows estimates rather than confirmed rewards, and says so on
+the card. If the RPC becomes available later the dashboard uses it, regardless of
+the earlier answer — the setting governs whether you are asked, not what is
+displayed.
 
 ## Backups and Restore
 

@@ -4,6 +4,7 @@ import { setDependencies } from '../dependencies'
 import { setInterfaces } from '../interfaces'
 import { sdk } from '../sdk'
 import { versionGraph } from '../versions'
+import { rewardsTask } from './rewardsTask'
 
 export const init = sdk.setupInit(
   restoreInit,
@@ -11,6 +12,7 @@ export const init = sdk.setupInit(
   setInterfaces,
   setDependencies,
   actions,
+  rewardsTask,
 )
 
 export const uninit = sdk.setupUninit(versionGraph)
