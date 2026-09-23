@@ -5,12 +5,14 @@ import { setInterfaces } from '../interfaces'
 import { sdk } from '../sdk'
 import { versionGraph } from '../versions'
 import { rewardsTask } from './rewardsTask'
+import { seedFiles } from './seedFiles'
 
 export const init = sdk.setupInit(
   restoreInit,
   versionGraph,
   setInterfaces,
   setDependencies,
+  seedFiles,
   actions,
   rewardsTask,
 )

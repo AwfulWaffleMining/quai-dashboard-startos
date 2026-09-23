@@ -1,18 +1,18 @@
 import { VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '1.1.0:16',
+  version: '1.1.0:17',
   releaseNotes: {
     en_US:
-      "Asks once, at install, whether the dashboard may use the node's RPC. Without it the dashboard still shows hashrate, workers, share history and the connection builder, but it cannot tell a workshare from a block, cannot show what each one actually paid, and cannot read the lock period — it shows estimates instead. Saying yes raises a task on the Quai Network package to turn RPC sharing on, which you approve there, because a dependency should never quietly change a setting on the service it depends on. Saying no is final until you re-run the action, and the dashboard runs either way.",
+      'Fixes the confirmed-rewards question never appearing. The settings file was not created at install, and reading a file that does not exist returns nothing rather than the default it would hold, so the task that asks about the RPC was skipped silently. Defaults are now written on install, update and restore.',
     es_ES:
-      'Pregunta una vez, al instalar, si el panel puede usar el RPC del nodo. Sin el, el panel sigue mostrando hashrate, trabajadores, historial de participaciones y el asistente de conexion, pero no puede distinguir una participacion de un bloque, ni mostrar lo que pago cada una, ni leer el periodo de bloqueo: muestra estimaciones. Decir que si crea una tarea en el paquete Quai Network para activar el uso compartido de RPC, que apruebas alli, porque una dependencia nunca deberia cambiar en silencio un ajuste del servicio del que depende.',
+      'Corrige que la pregunta sobre recompensas confirmadas nunca apareciera. El archivo de ajustes no se creaba al instalar, y leer un archivo inexistente no devuelve el valor por defecto, asi que la tarea se omitia en silencio. Ahora los valores por defecto se escriben al instalar, actualizar y restaurar.',
     de_DE:
-      'Fragt einmal bei der Installation, ob das Dashboard die RPC des Knotens nutzen darf. Ohne sie zeigt das Dashboard weiterhin Hashrate, Worker, Anteilsverlauf und den Verbindungsassistenten, kann aber einen Arbeitsanteil nicht von einem Block unterscheiden, nicht zeigen, was jeder tatsaechlich gezahlt hat, und die Sperrfrist nicht lesen - es zeigt Schaetzungen. Ein Ja erzeugt eine Aufgabe im Paket Quai Network, die RPC-Freigabe einzuschalten, die du dort bestaetigst, denn eine Abhaengigkeit sollte niemals still eine Einstellung des Dienstes aendern, von dem sie abhaengt.',
+      'Behebt, dass die Frage nach bestaetigten Belohnungen nie erschien. Die Einstellungsdatei wurde bei der Installation nicht angelegt, und das Lesen einer nicht vorhandenen Datei liefert nicht den Standardwert, sodass die Aufgabe stillschweigend uebersprungen wurde. Standardwerte werden jetzt bei Installation, Update und Wiederherstellung geschrieben.',
     pl_PL:
-      'Pyta raz, przy instalacji, czy panel moze korzystac z RPC wezla. Bez tego panel nadal pokazuje hashrate, koparki, historie udzialow i kreator polaczenia, ale nie odrozni udzialu od bloku, nie pokaze, ile kazdy faktycznie zaplacil, ani nie odczyta okresu blokady - pokazuje szacunki. Zgoda tworzy zadanie w pakiecie Quai Network, aby wlaczyc udostepnianie RPC, ktore zatwierdzasz tam, poniewaz zaleznosc nigdy nie powinna po cichu zmieniac ustawienia uslugi, od ktorej zalezy.',
+      'Naprawia brak pytania o potwierdzone nagrody. Plik ustawien nie byl tworzony przy instalacji, a odczyt nieistniejacego pliku nie zwraca wartosci domyslnej, wiec zadanie bylo po cichu pomijane. Wartosci domyslne sa teraz zapisywane przy instalacji, aktualizacji i przywracaniu.',
     fr_FR:
-      "Demande une fois, a l'installation, si le tableau de bord peut utiliser le RPC du noeud. Sans lui, le tableau de bord affiche toujours le hashrate, les mineurs, l'historique des parts et l'assistant de connexion, mais il ne peut pas distinguer une part d'un bloc, ni montrer ce que chacune a reellement paye, ni lire la periode de blocage : il affiche des estimations. Accepter cree une tache sur le paquet Quai Network pour activer le partage du RPC, que vous approuvez la-bas, car une dependance ne doit jamais modifier en silence un reglage du service dont elle depend.",
+      "Corrige l'absence de la question sur les recompenses confirmees. Le fichier de reglages n'etait pas cree a l'installation, et lire un fichier inexistant ne renvoie pas la valeur par defaut, donc la tache etait ignoree en silence. Les valeurs par defaut sont desormais ecrites a l'installation, a la mise a jour et a la restauration.",
   },
   migrations: {},
 })

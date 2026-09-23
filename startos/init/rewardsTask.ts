@@ -9,7 +9,9 @@ import { sdk } from '../sdk'
    way clears it, and stop/start never asks again. */
 export const rewardsTask = sdk.setupOnInit(async (effects) => {
   const choice = await storeJson.read((s) => s.rpcSharing).const(effects)
-  if (choice === 'unset') {
+  /* Anything that is not an explicit answer means we have not asked yet —
+     including null, which is what reading a not-yet-seeded file returns. */
+  if (choice !== 'enabled' && choice !== 'declined') {
     await sdk.action.createOwnTask(effects, confirmedRewards, 'critical', {
       reason: i18n(
         "Decide whether the dashboard may use the node's RPC to show what each workshare actually paid. It runs either way.",
