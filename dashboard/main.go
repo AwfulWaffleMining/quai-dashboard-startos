@@ -856,9 +856,15 @@ func (c *collector) findPayouts() {
 			continue // the payout may simply not have been mined yet
 		}
 		hit := false
+		/* A lookup that FAILS is not evidence of anything. Count them, and if any
+		   failed, leave the workshare pending rather than recording a miss: three
+		   misses condemn it permanently, and "you earned nothing" is the worst
+		   thing this dashboard can say wrongly. */
+		failed := 0
 		for i := uint64(1); i <= payoutScanDepth && !hit; i++ {
 			res, err := c.rpcCall("quai_getBlockByNumber", fmt.Sprintf(`["0x%x",true]`, b.Height+i))
 			if err != nil || len(res) == 0 || string(res) == "null" {
+				failed++
 				continue
 			}
 			var blk struct {
@@ -869,6 +875,7 @@ func (c *collector) findPayouts() {
 				} `json:"transactions"`
 			}
 			if err := json.Unmarshal(res, &blk); err != nil {
+				failed++
 				continue
 			}
 			for _, t := range blk.Transactions {
@@ -885,7 +892,11 @@ func (c *collector) findPayouts() {
 				break
 			}
 		}
-		if !hit {
+		if !hit && failed > 0 {
+			log.Printf("dashboard: payout scan for %d incomplete (%d/%d lookups failed) — leaving it pending",
+				b.Height, failed, payoutScanDepth)
+		}
+		if !hit && failed == 0 {
 			misses[b.Hash] = true
 		}
 	}
@@ -913,6 +924,30 @@ func (c *collector) findPayouts() {
 		}
 	}
 	c.dirty = true
+}
+
+/*
+Records marked orphaned before the scan-accounting fix were condemned by a
+
+	rule that counted RPC failures as missing payouts. Give them one more chance
+	under the corrected logic — a new rule has to be applied to the records
+	written under the old one, or the bug outlives the fix.
+*/
+func (c *collector) reopenOrphans() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for i := range c.st.Blocks {
+		if c.st.Blocks[i].PayoutState == "orphaned" && c.st.Blocks[i].PaidTx == "" {
+			c.st.Blocks[i].PayoutState = "pending"
+			c.st.Blocks[i].PayoutMiss = 0
+			n++
+		}
+	}
+	if n > 0 {
+		log.Printf("dashboard: re-checking %d workshare(s) previously marked not rewarded", n)
+		c.dirty = true
+	}
 }
 
 // sample appends one hashrate point per algorithm, with the reject rate over
@@ -962,6 +997,7 @@ func (c *collector) run(ctx context.Context) {
 	defer pollT.Stop()
 	defer sampleT.Stop()
 	defer saveT.Stop()
+	reopened := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -970,6 +1006,10 @@ func (c *collector) run(ctx context.Context) {
 		case <-pollT.C:
 			c.poll()
 			c.verifyKinds()
+			if !reopened {
+				c.reopenOrphans()
+				reopened = true
+			}
 			c.findPayouts()
 		case <-sampleT.C:
 			c.sample()
